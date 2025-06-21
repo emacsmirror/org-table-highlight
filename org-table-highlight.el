@@ -51,12 +51,14 @@ If VALUE is non-nil, only remove overlays where PROP equals VALUE."
                    (equal (overlay-get ov prop) value)))
       (delete-overlay ov))))
 
-(defun org-table-highlight-column ()
+(defun org-table-highlight-column (&optional color)
   "Highlight the current Org table column with a cycling background color."
-  (interactive)
+  (interactive
+   (list (when current-prefix-arg
+           (read-color "Highlight column color: "))))
   (when (org-at-table-p)
     (let* ((col (org-table-current-column))
-           (color (org-table-highlight--next-color org-table-highlighted-columns))
+           (color (or color (org-table-highlight--next-color org-table-highlighted-columns)))
            (end (save-excursion (org-table-end))))
       (cl-incf org-table-highlighted-columns)
       (save-excursion
@@ -72,8 +74,8 @@ If VALUE is non-nil, only remove overlays where PROP equals VALUE."
             (when (re-search-forward "[|\\|+]" line-end t)
               (org-table-highlight--remove-overlays pos (1- (point)) 'org-table-highlight-column)
               (org-table-highlight--make-overlay pos (1- (point))
-                                       `(:background ,color)
-                                       'org-table-highlight-column col)))
+                                                 `(:background ,color)
+                                                 'org-table-highlight-column col)))
           (forward-line 1))))))
 
 (defun org-table-highlight-clear-column-highlights (&optional all)
@@ -89,12 +91,14 @@ With prefix argument ALL, clear all column highlights."
 
 (defun org-table-highlight-row ()
   "Highlight the current Org table row with a cycling background color."
-  (interactive)
+  (interactive
+   (list (when current-prefix-arg
+           (read-color "Highlight row color: "))))
   (when (org-at-table-p)
     (let* ((start (line-beginning-position))
            (end (line-end-position))
            (row (org-table-current-line))
-           (color (org-table-highlight--next-color org-table-highlighted-rows)))
+           (color (or color (org-table-highlight--next-color org-table-highlighted-rows))))
       (cl-incf org-table-highlighted-rows)
       (org-table-highlight--remove-overlays start end 'org-table-highlight-row)
       (org-table-highlight--make-overlay start end `(:background ,color)
