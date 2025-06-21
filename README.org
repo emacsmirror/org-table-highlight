@@ -1,0 +1,59 @@
+
+Highlight Org-mode table columns and rows using colored overlays.  
+Designed for enhanced readability and interactive table highlighting.
+
+#+begin_quote
+“Tables should be seen, not just edited.”
+#+end_quote
+
+* Features
+
+- Highlight the current column or row in an Org-mode table
+- Cycle through a pastel color palette
+- All highlights are done using *non-intrusive overlays*
+- Clear row/column highlights individually or entirely
+
+* Installation
+
+Via =use-package=:
+
+#+begin_src emacs-lisp
+(use-package org-table-highlight
+  :vc (:url "https://www.github.com/llcc/org-table-highlight" :rev :newest))
+#+end_src
+
+Or manually:
+
+1. Copy =org-table-highlight.el= to a directory in your =load-path=
+2. Add the following to your init file:
+   #+begin_src emacs-lisp
+   (require 'org-table-highlight)
+   #+end_src
+
+* Usage
+
+Open an Org table and run the interactive commands:
+
+| Command                                     | Description                               |
+|---------------------------------------------+-------------------------------------------|
+| ~org-table-highlight-column~                  | Highlight the current column              |
+| ~org-table-highlight-row~                     | Highlight the current row                 |
+| ~org-table-highlight-clear-column-highlights~ | Clear current/all column highlights       |
+| ~org-table-highlight-clear-row-highlights~    | Clear current/all row highlights          |
+| ~org-table-highlight-clear-all-highlights~    | Clear all highlights in the current table |
+
+* Customization
+
+Customize the color palette by modifying this variable:
+
+#+begin_src emacs-lisp
+(setq org-table-highlight-color-palette
+      '("#FFFACD" "#E0FFFF" "#FFCCCC" "#E6E6FA"))
+#+end_src
+
+
+* License
+
+License © Lei Zhe
+
+Feel free to use, share, and improve!
