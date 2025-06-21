@@ -13,6 +13,8 @@ Designed for enhanced readability and interactive table highlighting.
 - All highlights are done using *non-intrusive overlays*
 - Clear row/column highlights individually or entirely
 
+[[file:demo.jpg]]
+
 * Installation
 
 Via =use-package=:
