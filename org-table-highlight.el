@@ -48,12 +48,36 @@ Each entry: (TABLE-NAME :col ((COL COLOR) ...) :row ((ROW COLOR) ...)).")
 
 (defun org-table-highlight--remove-overlays (start end prop &optional value)
   "Remove overlays from START to END that have PROP.
-If VALUE is non-nil, only remove overlays where PROP equals VALUE."
-  (dolist (ov (overlays-in start end))
-    (when (and (overlay-get ov prop)
-               (or (not value)
-                   (equal (overlay-get ov prop) value)))
-      (delete-overlay ov))))
+If VALUE is non-nil, only remove overlays where PROP equals VALUE.
+Automatically decrement related highlight counters and clean metadata."
+  (let ((table-name (org-table-highlight--get-table-name)))
+    ;; Remove matching metadata
+    (setq org-table-highlight--column-metadata
+          (cl-mapcan
+           (lambda (entry)
+             (let ((name (car entry))
+                   (plist (cdr entry)))
+               (if (string= name table-name)
+                   (let* ((key (if (eq prop 'org-table-highlight-column) :col :row))
+                          (existing (plist-get plist key))
+                          (filtered (cl-remove-if (lambda (item) (equal (car item) value))
+                                                  existing)))
+                     (if (null filtered)
+                         ;; If no entries left, remove this prop
+                         (let ((new-plist (cl-remove key plist)))
+                           (if (null new-plist)
+                               nil      ; remove whole table entry
+                             (list (cons name new-plist))))
+                       ;; Otherwise update the prop with filtered list
+                       (list (cons name (plist-put plist key filtered)))))
+                 ;; Leave other entries untouched
+                 (list entry))))
+           org-table-highlight--column-metadata))
+    (dolist (ov (overlays-in start end))
+      (when (and (overlay-get ov prop)
+                 (or (not value)
+                     (equal (overlay-get ov prop) value)))
+        (delete-overlay ov)))))
 
 (defun org-table-highlight--update-metadata (table-name type index color)
   "Update highlight metadata for TABLE-NAME.
