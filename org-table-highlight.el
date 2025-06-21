@@ -51,12 +51,10 @@ If VALUE is non-nil, only remove overlays where PROP equals VALUE."
                    (equal (overlay-get ov prop) value)))
       (delete-overlay ov))))
 
-;; Public interactive functions
 (defun org-table-highlight-column ()
   "Highlight the current Org table column with a cycling background color."
   (interactive)
   (when (org-at-table-p)
-    (global-hl-line-mode -1)
     (let* ((col (org-table-current-column))
            (color (org-table-highlight--next-color org-table-highlighted-columns))
            (end (save-excursion (org-table-end))))
@@ -76,8 +74,7 @@ If VALUE is non-nil, only remove overlays where PROP equals VALUE."
               (org-table-highlight--make-overlay pos (1- (point))
                                        `(:background ,color)
                                        'org-table-highlight-column col)))
-          (forward-line 1))))
-    (global-hl-line-mode 1)))
+          (forward-line 1))))))
 
 (defun org-table-highlight-clear-column-highlights (&optional all)
   "Clear highlights in current Org table column.
