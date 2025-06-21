@@ -72,8 +72,9 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the string."
   "Try to get the Org table name via #+NAME."
   (save-excursion
     (goto-char (org-table-begin))
-    (when (re-search-backward "^[ \t]*#\\+NAME:[ \t]*\\(.*\\)" nil t)
-      (string-trim (match-string 1)))))
+    (forward-line -1)
+    (when (looking-at "^[ \t]*#\\+NAME:[ \t]*\\(.*\\)")
+      (string-trim (match-string-no-properties 1)))))
 
 (defun org-table-highlight-column (&optional color)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
@@ -127,7 +128,6 @@ With \\[universal-argument] prefix, prompt for color."
       (org-table-highlight--make-overlay start end `(:background ,chosen-color)
                                          'org-table-highlight-row row))))
 
-
 (defun org-table-highlight-restore ()
   "Restore column and row highlights for the current Org table using metadata."
   (interactive)
@@ -158,6 +158,8 @@ With \\[universal-argument] prefix, prompt for color."
             (forward-line (1- row))
             (org-table-highlight-row color))
           (cl-decf org-table-highlighted-rows))))))
+
+(advice-add 'org-table-align :after #'org-table-highlight-restore)
 
 (defun org-table-highlight-clear-column-highlights (&optional all)
   "Clear highlights in current Org table column.
