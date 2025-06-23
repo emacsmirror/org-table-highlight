@@ -189,7 +189,11 @@ With prefix argument ALL, clear all row highlights."
 (defun org-table-highlight-clear-all-highlights ()
   "Clear all column and row highlights in current Org table."
   (interactive)
-  (when-let ((bounds (org-table-highlight--table-bounds)))
+  (when-let ((buf-name (buffer-name))
+             (table-name (org-table-highlight--get-table-name))
+             (bounds (org-table-highlight--table-bounds)))
+    (org-table-highlight--remove-metadata
+     buf-name table-name nil)
     (org-table-highlight--remove-overlays
      (car bounds) (cdr bounds) 'org-table-highlight-column)
     (org-table-highlight--remove-overlays
@@ -282,7 +286,7 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
             (if filtered
                 (setcdr table-entry (plist-put plist type filtered))
               (setcdr buf-entry
-                      (assq-delete-all table-name (cadr buf-entry))))))
+                      (assoc-delete-all table-name (cadr buf-entry) #'equal)))))
 
          ;; Case: remove all of a type (e.g., all rows)
          ((and table-entry type (null index))
@@ -291,7 +295,7 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
          ;; Case: remove entire table entry
          ((and table-entry (null type))
           (setcdr buf-entry
-                  (assq-delete-all table-name (cdr buf-entry))))))
+                  (assoc-delete-all table-name (cadr buf-entry) #'equal)))))
 
       ;; If buf-entry has no more tables, remove the buffer entirely
       (when (null (cdr buf-entry))
