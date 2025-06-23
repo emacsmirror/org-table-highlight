@@ -217,7 +217,8 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
                 ;; Modify plist in place by setting cdr of table-entry
                 (setcdr table-entry new-plist))
             ;; Table does not exist, add new entry to table-list in place
-            (setcdr buf-entry (list (append table-list (list (list table-name type (list (list index color)))))))))
+            (when table-name
+              (setcdr buf-entry (list (append table-list (list (list table-name type (list (list index color))))))))))
       ;; Buffer does not exist, add new buffer entry
       (push (list buf-name (list (list table-name type (list (list index color)))))
             org-table-highlight--metadata))
