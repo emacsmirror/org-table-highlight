@@ -32,7 +32,7 @@ Format is:
    ...))")
 
 ;; Internal helper functions
-(defun org-table-highlight--bounds ()
+(defun org-table-highlight--table-bounds ()
   "Return the (START . END) buffer positions of the current Org table."
   (when (org-at-table-p)
     (cons (save-excursion (org-table-begin))
@@ -54,8 +54,6 @@ Format is:
   "Remove overlays from START to END that have PROP.
 If VALUE is non-nil, only remove overlays where PROP equals VALUE.
 Also updates and saves `org-table-highlight--metadata`."
-  (let* ((table-name (org-table-highlight--get-table-name))
-         (buf-name (buffer-name))))
   (dolist (ov (overlays-in start end))
     (when (and (overlay-get ov prop)
                (or (not value)
@@ -74,22 +72,21 @@ Also updates and saves `org-table-highlight--metadata`."
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
 With \\[universal-argument] prefix, prompt for color."
   (interactive
-   (list (when current-prefix-arg
-           (read-color "Column color: " t))))
+   (list (when current-prefix-arg (read-color "Column color: " t))))
   (when (org-at-table-p)
-    (let* ((col (org-table-current-column))
+    (let* ((buf-name (buffer-name))
            (table-name (org-table-highlight--get-table-name))
-           (buf-name (buffer-name))
+           (col (org-table-current-column))
            (chosen-color (or color
                              (org-table-highlight--next-color org-table-highlighted-columns)))
-           (end (save-excursion (org-table-end))))
+           (bounds (org-table-highlight--table-bounds)))
       (cl-incf org-table-highlighted-columns)
-      (unless table-name
-        (message "Consider adding #+NAME: for this table to persist highlights.")
-        (org-table-highlight--update-metadata buf-name table-name :col col chosen-color))
+      (if table-name
+          (org-table-highlight--update-metadata buf-name table-name :col col chosen-color)
+        (message "Consider adding #+NAME: for this table to persist highlights."))
       (save-excursion
-        (goto-char (org-table-begin))
-        (while (< (point) end)
+        (goto-char (car bounds))
+        (while (< (point) (cdr bounds))
           (let ((line-end (line-end-position))
                 (pos (line-beginning-position))
                 (i 0))
@@ -104,25 +101,23 @@ With \\[universal-argument] prefix, prompt for color."
                                                  'org-table-highlight-column col)))
           (forward-line 1))))))
 
-
 (defun org-table-highlight-row (&optional color)
   "Highlight the current Org table row with a cycling or user-supplied COLOR.
 With \\[universal-argument] prefix, prompt for color."
   (interactive
-   (list (when current-prefix-arg
-           (read-color "Row color: " t))))
+   (list (when current-prefix-arg (read-color "Row color: " t))))
   (when (org-at-table-p)
-    (let* ((row (org-table-current-line))
+    (let* ((buf-name (buffer-name))
            (table-name (org-table-highlight--get-table-name))
-           (buf-name (buffer-name))
+           (row (org-table-current-line))
            (chosen-color (or color
                              (org-table-highlight--next-color org-table-highlighted-rows)))
            (start (line-beginning-position))
            (end (line-end-position)))
       (cl-incf org-table-highlighted-rows)
-      (unless table-name
-        (message "Consider adding #+NAME: for this table to persist highlights.")
-        (org-table-highlight--update-metadata buf-name table-name :row row chosen-color))
+      (if table-name
+          (org-table-highlight--update-metadata buf-name table-name :row row chosen-color)
+        (message "Consider adding #+NAME: for this table to persist highlights."))
       (org-table-highlight--remove-overlays start end 'org-table-highlight-row)
       (org-table-highlight--make-overlay start end `(:background ,chosen-color)
                                          'org-table-highlight-row row))))
@@ -143,7 +138,7 @@ With \\[universal-argument] prefix, prompt for color."
         ;; Reapply column highlights
         (dolist (col-entry (plist-get (cdr table-entry) :col))
           (let ((col (car col-entry))
-                (color (cadr col-entry)))
+                (color (cdr col-entry)))
             (save-excursion
               (org-table-goto-column col)
               (org-table-highlight-column color))
@@ -152,7 +147,7 @@ With \\[universal-argument] prefix, prompt for color."
         ;; Reapply row highlights
         (dolist (row-entry (plist-get (cdr table-entry) :row))
           (let ((row (car row-entry))
-                (color (cadr row-entry)))
+                (color (cdr row-entry)))
             (save-excursion
               (goto-char (org-table-begin))
               (forward-line (1- row))
@@ -167,7 +162,7 @@ With prefix argument ALL, clear all column highlights."
   (interactive "P")
   (when-let ((buf-name (buffer-name))
              (table-name (org-table-highlight--get-table-name))
-             (bounds (org-table-highlight--bounds)))
+             (bounds (org-table-highlight--table-bounds)))
     (let ((col (org-table-current-column)))
       (org-table-highlight--remove-metadata
        buf-name table-name :col (or all col))
@@ -182,7 +177,7 @@ With prefix argument ALL, clear all row highlights."
   (interactive "P")
   (when-let ((buf-name (buffer-name))
              (table-name (org-table-highlight--get-table-name))
-             (bounds (org-table-highlight--bounds)))
+             (bounds (org-table-highlight--table-bounds)))
     (let ((row (org-table-current-line)))
       (org-table-highlight--remove-metadata
        buf-name table-name :row (or all row))
@@ -194,7 +189,7 @@ With prefix argument ALL, clear all row highlights."
 (defun org-table-highlight-clear-all-highlights ()
   "Clear all column and row highlights in current Org table."
   (interactive)
-  (when-let ((bounds (org-table-highlight--bounds)))
+  (when-let ((bounds (org-table-highlight--table-bounds)))
     (org-table-highlight--remove-overlays
      (car bounds) (cdr bounds) 'org-table-highlight-column)
     (org-table-highlight--remove-overlays
@@ -212,7 +207,7 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
               (let* ((plist (cdr table-entry))
                      (existing (plist-get plist type))
                      (filtered (cl-remove-if (lambda (item) (= (car item) index)) existing))
-                     (newlist (cons (list index color) filtered))
+                     (newlist (cons (cons index color) filtered))
                      (new-plist (plist-put plist type newlist)))
                 ;; Modify plist in place by setting cdr of table-entry
                 (setcdr table-entry new-plist))
@@ -220,7 +215,7 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
             (when table-name
               (setcdr buf-entry (list (append table-list (list (list table-name type (list (list index color))))))))))
       ;; Buffer does not exist, add new buffer entry
-      (push (list buf-name (list (list table-name type (list (list index color)))))
+      (push (list buf-name (list (list table-name type (list (cons index color)))))
             org-table-highlight--metadata))
     (org-table-highlight-save-metadata)))
 
@@ -277,40 +272,33 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
 - If BUF-NAME has no tables left, remove BUF-NAME from metadata."
   (let ((buf-entry (assoc buf-name org-table-highlight--metadata)))
     (when buf-entry
-      (let ((table-list (cdr buf-entry))
-            (new-table-list '()))
-        (dolist (table-entry table-list)
-          (let ((name (car table-entry))
-                (plist (cdr table-entry)))
-            (if (not (equal name table-name))
-                (push table-entry new-table-list)
-              ;; Entry matches the table-name
-              (cond
-               ;; Case: remove a specific index under type (e.g., column 2)
-               ((and type index)
-                (let* ((entries (plist-get plist type))
-                       (filtered (cl-remove-if (lambda (item) (= (car item) index)) entries))
-                       (new-plist (if filtered
-                                      (plist-put plist type filtered)
-                                    (cl-remprop plist type))))
-                  (when new-plist
-                    (push (cons name new-plist) new-table-list))))
-               ;; Case: remove all of a type (e.g., all rows)
-               ((and type (null index))
-                (let ((new-plist (cl-remprop plist type)))
-                  (when new-plist
-                    (push (cons name new-plist) new-table-list))))
-               ;; Case: remove entire table entry
-               ((null type)
-                ;; skip this table-entry (do not push)
-                nil)))))
-        ;; Update buffer metadata
-        (if new-table-list
-            (setcdr buf-entry (nreverse new-table-list))
-          ;; No tables left — remove buffer
-          (setq org-table-highlight--metadata
-                (assq-delete-all buf-name org-table-highlight--metadata)))))
-    (org-table-highlight-save-metadata)))
+      (let ((table-entry (assoc table-name (cadr buf-entry))))
+        (cond
+         ;; Case: remove a specific index under type (e.g., column 2)
+         ((and table-entry type index)
+          (let* ((plist (cdr table-entry))
+                 (entries (plist-get plist type))
+                 (filtered (cl-remove-if (lambda (item) (= (car item) index)) entries)))
+            (if filtered
+                (setcdr table-entry (plist-put plist type filtered))
+              (setcdr buf-entry
+                      (assq-delete-all table-name (cadr buf-entry))))))
+
+         ;; Case: remove all of a type (e.g., all rows)
+         ((and table-entry type (null index))
+          (setcdr table-entry (cl-remprop (cdr table-entry) type)))
+
+         ;; Case: remove entire table entry
+         ((and table-entry (null type))
+          (setcdr buf-entry
+                  (assq-delete-all table-name (cdr buf-entry))))))
+
+      ;; If buf-entry has no more tables, remove the buffer entirely
+      (when (null (cdr buf-entry))
+        (setq org-table-highlight--metadata
+              (assq-delete-all buf-name org-table-highlight--metadata)))))
+
+  (org-table-highlight-save-metadata))
 
 (provide 'org-table-highlight)
 ;;; org-table-highlight.el ends here
