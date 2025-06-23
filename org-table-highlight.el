@@ -286,7 +286,7 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
             (if filtered
                 (setcdr table-entry (plist-put plist type filtered))
               (setcdr buf-entry
-                      (assoc-delete-all table-name (cadr buf-entry) #'equal)))))
+                      (list (assoc-delete-all table-name (cadr buf-entry) #'equal))))))
 
          ;; Case: remove all of a type (e.g., all rows)
          ((and table-entry type (null index))
@@ -295,12 +295,12 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
          ;; Case: remove entire table entry
          ((and table-entry (null type))
           (setcdr buf-entry
-                  (assoc-delete-all table-name (cadr buf-entry) #'equal)))))
+                  (list (assoc-delete-all table-name (cadr buf-entry) #'equal))))))
 
       ;; If buf-entry has no more tables, remove the buffer entirely
-      (when (null (cdr buf-entry))
+      (when (null (cadr buf-entry))
         (setq org-table-highlight--metadata
-              (assq-delete-all buf-name org-table-highlight--metadata)))))
+              (assoc-delete-all buf-name org-table-highlight--metadata #'equal)))))
 
   (org-table-highlight-save-metadata))
 
