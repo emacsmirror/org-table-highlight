@@ -83,6 +83,7 @@ If VALUE is non-nil, only return true if PROP equals VALUE."
                (and ov-val (or (not value) (equal ov-val value)))))
            (overlays-at (point))))
 
+;;;###autoload
 (defun org-table-highlight-column (&optional color)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
 With \\[universal-argument] prefix, prompt for color."
@@ -112,11 +113,12 @@ With \\[universal-argument] prefix, prompt for color."
                 (setq pos (point))
                 (setq i (1+ i)))
               (when (re-search-forward "[|\\|+]" line-end t)
-                  (org-table-highlight--make-overlay
-                   pos (1- (point)) `(:background ,chosen-color)
-                   'org-table-highlight-column col)))
+                (org-table-highlight--make-overlay
+                 pos (1- (point)) `(:background ,chosen-color)
+                 'org-table-highlight-column col)))
             (forward-line 1)))))))
 
+;;;###autoload
 (defun org-table-highlight-row (&optional color)
   "Highlight the current Org table row with a cycling or user-supplied COLOR.
 With \\[universal-argument] prefix, prompt for color."
@@ -168,6 +170,7 @@ With \\[universal-argument] prefix, prompt for color."
 (advice-add 'org-table-align :after #'org-table-highlight-restore)
 (advice-add 'org-table-next-field :after #'org-table-highlight-restore)
 
+;;;###autoload
 (defun org-table-highlight-clear-column-highlights (&optional all)
   "Clear highlights in current Org table column.
 With prefix argument ALL, clear all column highlights."
@@ -183,6 +186,7 @@ With prefix argument ALL, clear all column highlights."
          (car bounds) (cdr bounds)
          'org-table-highlight-column col)))))
 
+;;;###autoload
 (defun org-table-highlight-clear-row-highlights (&optional all)
   "Clear highlights in current Org table row.
 With prefix argument ALL, clear all row highlights."
@@ -194,8 +198,9 @@ With prefix argument ALL, clear all row highlights."
       (let ((row (if all nil (org-table-current-line))))
         (org-table-highlight--remove-metadata buf-name table-name :row row)
         (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
-         'org-table-highlight-row row)))))
+                                              'org-table-highlight-row row)))))
 
+;;;###autoload
 (defun org-table-highlight-clear-all-highlights ()
   "Clear all column and row highlights in current Org table."
   (interactive)
@@ -322,6 +327,7 @@ highlight color."
 
   (org-table-highlight-save-metadata))
 
+;;;###autoload
 (defun org-table-highlight-apply-buffer-metadata ()
   "Apply highlight metadata to all tables in the current buffer."
   (interactive)
