@@ -52,11 +52,12 @@ Format is:
     ov))
 
 (defun org-table-highlight--remove-overlays (start end prop &optional value)
-  "Efficiently remove overlays with PROP (and VALUE) between START and END."
-  (save-restriction
-    (narrow-to-region start end)
-    (remove-overlays (point-min) (point-max)
-                     prop (when value value))))
+  "Delete overlays between START and END that have PROP (and optionally VALUE)."
+  (dolist (ov (overlays-in start end))
+    (when (and (overlay-get ov prop)
+               (or (not value) (equal (overlay-get ov prop) value)))
+      (delete-overlay ov))))
+
 
 (defun org-table-highlight--get-table-name ()
   "Try to get the Org table name via #+NAME."
@@ -103,9 +104,9 @@ With \\[universal-argument] prefix, prompt for color."
                 (setq pos (point))
                 (setq i (1+ i)))
               (when (re-search-forward "[|\\|+]" line-end t)
-                  (org-table-highlight--make-overlay pos (1- (point))
-                                                     `(:background ,chosen-color)
-                                                     'org-table-highlight-column col)))
+                  (org-table-highlight--make-overlay
+                   pos (1- (point)) `(:background ,chosen-color)
+                   'org-table-highlight-column col)))
             (forward-line 1)))))))
 
 (defun org-table-highlight-row (&optional color)
@@ -163,32 +164,29 @@ With \\[universal-argument] prefix, prompt for color."
   "Clear highlights in current Org table column.
 With prefix argument ALL, clear all column highlights."
   (interactive "P")
-  (when (org-table-highlight--overlayp 'org-table-highlight-column)
+  (when (or all (org-table-highlight--overlayp 'org-table-highlight-column))
     (when-let ((buf-name (buffer-name))
                (table-name (org-table-highlight--get-table-name))
                (bounds (org-table-highlight--table-bounds)))
-      (let ((col (org-table-current-column)))
+      (let ((col (if all nil (org-table-current-column))))
         (org-table-highlight--remove-metadata
-         buf-name table-name :col (or all col))
+         buf-name table-name :col col)
         (org-table-highlight--remove-overlays
          (car bounds) (cdr bounds)
-         'org-table-highlight-column
-         (unless all col))))))
+         'org-table-highlight-column col)))))
 
 (defun org-table-highlight-clear-row-highlights (&optional all)
   "Clear highlights in current Org table row.
 With prefix argument ALL, clear all row highlights."
   (interactive "P")
-  (when-let ((buf-name (buffer-name))
-             (table-name (org-table-highlight--get-table-name))
-             (bounds (org-table-highlight--table-bounds)))
-    (let ((row (org-table-current-line)))
-      (org-table-highlight--remove-metadata
-       buf-name table-name :row (or all row))
-      (org-table-highlight--remove-overlays
-       (car bounds) (cdr bounds)
-       'org-table-highlight-row
-       (unless all row)))))
+  (when (or all (org-table-highlight--overlayp 'org-table-highlight-column))
+    (when-let ((buf-name (buffer-name))
+               (table-name (org-table-highlight--get-table-name))
+               (bounds (org-table-highlight--table-bounds)))
+      (let ((row (if all nil (org-table-current-line))))
+        (org-table-highlight--remove-metadata buf-name table-name :row row)
+        (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
+         'org-table-highlight-row row)))))
 
 (defun org-table-highlight-clear-all-highlights ()
   "Clear all column and row highlights in current Org table."
@@ -196,8 +194,7 @@ With prefix argument ALL, clear all row highlights."
   (when-let ((buf-name (buffer-name))
              (table-name (org-table-highlight--get-table-name))
              (bounds (org-table-highlight--table-bounds)))
-    (org-table-highlight--remove-metadata
-     buf-name table-name nil)
+    (org-table-highlight--remove-metadata buf-name table-name nil)
     (org-table-highlight--remove-overlays
      (car bounds) (cdr bounds) 'org-table-highlight-column)
     (org-table-highlight--remove-overlays
