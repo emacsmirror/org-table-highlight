@@ -51,14 +51,11 @@ Format is:
     ov))
 
 (defun org-table-highlight--remove-overlays (start end prop &optional value)
-  "Remove overlays from START to END that have PROP.
-If VALUE is non-nil, only remove overlays where PROP equals VALUE.
-Also updates and saves `org-table-highlight--metadata`."
-  (dolist (ov (overlays-in start end))
-    (when (and (overlay-get ov prop)
-               (or (not value)
-                   (equal (overlay-get ov prop) value)))
-      (delete-overlay ov))))
+  "Efficiently remove overlays with PROP (and VALUE) between START and END."
+  (save-restriction
+    (narrow-to-region start end)
+    (remove-overlays (point-min) (point-max)
+                     prop (when value value))))
 
 (defun org-table-highlight--get-table-name ()
   "Try to get the Org table name via #+NAME."
@@ -84,22 +81,24 @@ With \\[universal-argument] prefix, prompt for color."
       (if table-name
           (org-table-highlight--update-metadata buf-name table-name :col col chosen-color)
         (message "Consider adding #+NAME: for this table to persist highlights."))
-      (save-excursion
-        (goto-char (car bounds))
-        (while (< (point) (cdr bounds))
-          (let ((line-end (line-end-position))
-                (pos (line-beginning-position))
-                (i 0))
-            (while (and (< i col)
-                        (re-search-forward "[|\\|+]" line-end t))
-              (setq pos (point))
-              (setq i (1+ i)))
-            (when (re-search-forward "[|\\|+]" line-end t)
-              (org-table-highlight--remove-overlays pos (1- (point)) 'org-table-highlight-column col)
-              (org-table-highlight--make-overlay pos (1- (point))
-                                                 `(:background ,chosen-color)
-                                                 'org-table-highlight-column col)))
-          (forward-line 1))))))
+      (save-restriction
+        (narrow-to-region (car bounds) (cdr bounds))
+        (save-excursion
+          (goto-char (point-min))
+          (while (not (eobp))
+            (let ((line-end (line-end-position))
+                  (pos (line-beginning-position))
+                  (i 0))
+              (while (and (< i col)
+                          (re-search-forward "[|\\|+]" line-end t))
+                (setq pos (point))
+                (setq i (1+ i)))
+              (when (re-search-forward "[|\\|+]" line-end t)
+                (org-table-highlight--remove-overlays pos (1- (point)) 'org-table-highlight-column col)
+                (org-table-highlight--make-overlay pos (1- (point))
+                                                   `(:background ,chosen-color)
+                                                   'org-table-highlight-column col)))
+            (forward-line 1)))))))
 
 (defun org-table-highlight-row (&optional color)
   "Highlight the current Org table row with a cycling or user-supplied COLOR.
@@ -218,7 +217,7 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
                 (setcdr table-entry new-plist))
             ;; Table does not exist, add new entry to table-list in place
             (when table-name
-              (setcdr buf-entry (list (append table-list (list (list table-name type (list (list index color))))))))))
+              (setcdr buf-entry (list (append table-list (list (list table-name type (list (cons index color))))))))))
       ;; Buffer does not exist, add new buffer entry
       (push (list buf-name (list (list table-name type (list (cons index color)))))
             org-table-highlight--metadata))
