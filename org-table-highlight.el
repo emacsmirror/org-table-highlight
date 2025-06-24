@@ -14,9 +14,16 @@
 
 ;;; Code:
 
+(defgroup org-table-highlight nil
+  "Highlight columns and rows in Org tables."
+  :prefix "org-table-highlight-"
+  :group 'org)
+
 (defcustom org-table-highlight-color-palette
   '("#FFE4B5" "#C1FFC1" "#B0E0E6" "#FFB6C1" "#D8BFD8" "#F4A460" "#ADD8E6")
-  "List of pastel colors used to highlight Org table columns and rows.")
+  "List of pastel colors used to highlight Org table columns and rows."
+  :type '(repeat color)
+  :group 'org-table-highlight)
 
 (defvar-local org-table-highlight--highlighted-columns 0
   "Number of Org table columns currently highlighted.")
@@ -203,7 +210,8 @@ With prefix argument ALL, clear all row highlights."
 
 (defun org-table-highlight--update-metadata (buf-name table-name type index color)
   "Update highlight metadata for BUF-NAME and TABLE-NAME.
-TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the highlight color."
+TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the
+highlight color."
   (let ((buf-entry (assoc buf-name org-table-highlight--metadata)))
     (if buf-entry
         (let* ((table-list (cadr buf-entry))
@@ -212,14 +220,21 @@ TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the highligh
               ;; Update existing table entry in place
               (let* ((plist (cdr table-entry))
                      (existing (plist-get plist type))
-                     (filtered (cl-remove-if (lambda (item) (= (car item) index)) existing))
+                     (filtered (cl-remove-if
+                                (lambda (item)
+                                  (= (car item) index))
+                                existing))
                      (newlist (cons (cons index color) filtered))
                      (new-plist (plist-put plist type newlist)))
                 ;; Modify plist in place by setting cdr of table-entry
                 (setcdr table-entry new-plist))
             ;; Table does not exist, add new entry to table-list in place
             (when table-name
-              (setcdr buf-entry (list (append table-list (list (list table-name type (list (cons index color))))))))))
+              (setcdr buf-entry
+                      (list (append table-list
+                                    (list
+                                     (list table-name type
+                                           (list (cons index color))))))))))
       ;; Buffer does not exist, add new buffer entry
       (push (list buf-name (list (list table-name type (list (cons index color)))))
             org-table-highlight--metadata))
@@ -228,16 +243,32 @@ TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the highligh
 (defcustom org-table-highlight-metadata-file
   (locate-user-emacs-file "org-table-highlight-metadata.el")
   "File where Org table highlight metadata is saved."
-  :type 'file)
+  :type 'file
+  :group 'org-table-highlight)
 
 (defun org-table-highlight-save-metadata ()
-  "Save `org-table-highlight--metadata` to `org-table-highlight-metadata-file`."
+  "Save `org-table-highlight--metadata` to `org-table-highlight-metadata-file'."
   (interactive)
   (with-temp-file org-table-highlight-metadata-file
     (insert ";;; org-table-highlight saved metadata\n\n")
     (prin1 `(setq org-table-highlight--metadata
                   ,org-table-highlight--metadata)
            (current-buffer))))
+
+(defun org-table-highlight-load-metadata ()
+  "Load Org table highlight metadata from `org-table-highlight-metadata-file'."
+  (interactive)
+  (when (file-exists-p org-table-highlight-metadata-file)
+    (with-temp-buffer
+      (insert-file-contents org-table-highlight-metadata-file)
+      (goto-char (point-min))
+      (let ((form (condition-case nil
+                      (read (current-buffer))
+                    (error nil))))
+        (when (and (consp form)
+                   (eq (car form) 'setq)
+                   (eq (cadr form) 'org-table-highlight--metadata))
+          (setq org-table-highlight--metadata (nth 2 form)))))))
 
 (defun org-table-highlight--remove-plist-key (plist key)
   "Return a copy of PLIST with KEY and its value removed."
