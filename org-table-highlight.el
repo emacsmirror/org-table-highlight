@@ -59,11 +59,9 @@ Format is:
 
 (defun org-table-highlight--get-table-name ()
   "Try to get the Org table name via #+NAME."
-  (save-excursion
-    (goto-char (org-table-begin))
-    (forward-line -1)
-    (when (looking-at "^[ \t]*#\\+NAME:[ \t]*\\(.*\\)")
-      (string-trim (match-string-no-properties 1)))))
+  (when-let (table (org-element-lineage
+                    (org-element-context) 'table t))
+    (plist-get (cadr table) :name)))
 
 (defun org-table-highlight-column (&optional color)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
