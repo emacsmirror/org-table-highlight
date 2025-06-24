@@ -155,6 +155,7 @@ With \\[universal-argument] prefix, prompt for color."
             (cl-decf org-table-highlighted-rows)))))))
 
 (advice-add 'org-table-align :after #'org-table-highlight-restore)
+(advice-add 'org-table-next-field :after #'org-table-highlight-restore)
 
 (defun org-table-highlight-clear-column-highlights (&optional all)
   "Clear highlights in current Org table column.
@@ -237,35 +238,15 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
                   ,org-table-highlight--metadata)
            (current-buffer))))
 
-(defun org-table-highlight-apply-buffer-metadata ()
-  "Apply highlight metadata to all tables in the current buffer."
-  (interactive)
-  (let* ((buf-name (buffer-name))
-         (buf-entry (assoc buf-name org-table-highlight--metadata)))
-    (when buf-entry
-      (dolist (table-entry (cadr buf-entry))
-        (let ((table-name (car table-entry))
-              (plist (cdr table-entry)))
-          (save-excursion
-            (goto-char (point-min))
-            (when (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote table-name)) nil t)
-              (forward-line 1)
-              (when (org-at-table-p)
-                ;; Apply columns
-                (dolist (col-entry (plist-get plist :col))
-                  (let ((col (car col-entry))
-                        (color (cadr col-entry)))
-                    (org-table-goto-column col)
-                    (org-table-highlight-column color)
-                    (cl-decf org-table-highlighted-columns)))
-                ;; Apply rows
-                (dolist (row-entry (plist-get plist :row))
-                  (let ((row (car row-entry))
-                        (color (cadr row-entry)))
-                    (goto-char (org-table-begin))
-                    (forward-line (1- row))
-                    (org-table-highlight-row color)
-                    (cl-decf org-table-highlighted-rows)))))))))))
+(defun org-table-highlight--remove-plist-key (plist key)
+  "Return a copy of PLIST with KEY and its value removed."
+  (let (new-plist)
+    (while plist
+      (let ((k (pop plist))
+            (v (pop plist)))
+        (unless (eq k key)
+          (setq new-plist (plist-put new-plist k v)))))
+    new-plist))
 
 (defun org-table-highlight--remove-metadata (buf-name table-name type &optional index)
   "Remove highlight metadata from `org-table-highlight--metadata`.
@@ -285,17 +266,21 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
                  (filtered (cl-remove-if (lambda (item) (= (car item) index)) entries)))
             (if filtered
                 (setcdr table-entry (plist-put plist type filtered))
-              (setcdr buf-entry
-                      (list (assoc-delete-all table-name (cadr buf-entry) #'equal))))))
+              (setcdr table-entry
+                      (org-table-highlight--remove-plist-key (cdr table-entry) type)))))
 
          ;; Case: remove all of a type (e.g., all rows)
          ((and table-entry type (null index))
-          (setcdr table-entry (cl-remprop (cdr table-entry) type)))
+          (setcdr table-entry (org-table-highlight--remove-plist-key (cdr table-entry) type)))
 
          ;; Case: remove entire table entry
          ((and table-entry (null type))
           (setcdr buf-entry
-                  (list (assoc-delete-all table-name (cadr buf-entry) #'equal))))))
+                  (list (assoc-delete-all table-name (cadr buf-entry) #'equal)))))
+
+        (when (null (cddr table-entry))
+          (setcdr buf-entry
+                  (list (assoc-delete-all table-name (cadr buf-entry) #'equal)))))
 
       ;; If buf-entry has no more tables, remove the buffer entirely
       (when (null (cadr buf-entry))
@@ -303,6 +288,39 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
               (assoc-delete-all buf-name org-table-highlight--metadata #'equal)))))
 
   (org-table-highlight-save-metadata))
+
+(defun org-table-highlight-apply-buffer-metadata ()
+  "Apply highlight metadata to all tables in the current buffer."
+  (interactive)
+  (let* ((buf-name (buffer-name))
+         (buf-entry (assoc buf-name org-table-highlight--metadata)))
+    (when buf-entry
+      (dolist (table-entry (cadr buf-entry))
+        (let ((table-name (car table-entry))
+              (plist (cdr table-entry)))
+          (save-excursion
+            (goto-char (point-min))
+            (when (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote table-name)) nil t)
+              (forward-line 1)
+              (when (org-at-table-p)
+                ;; Apply columns
+                (dolist (col-entry (plist-get plist :col))
+                  (let ((col (car col-entry))
+                        (color (cdr col-entry)))
+                    (org-table-goto-column col)
+                    (org-table-highlight-column color)
+                    (cl-decf org-table-highlighted-columns)))
+                ;; Apply rows
+                (dolist (row-entry (plist-get plist :row))
+                  (let ((row (car row-entry))
+                        (color (cdr row-entry)))
+                    (goto-char (org-table-begin))
+                    (forward-line (1- row))
+                    (org-table-highlight-row color)
+                    (cl-decf org-table-highlighted-rows)))))))))))
+
+(add-hook 'after-init-hook #'org-table-highlight-load-metadata)
+(add-hook 'org-mode-hook #'org-table-highlight-apply-buffer-metadata)
 
 (provide 'org-table-highlight)
 ;;; org-table-highlight.el ends here
