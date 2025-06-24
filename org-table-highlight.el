@@ -1,9 +1,10 @@
 ;;; org-table-highlight.el --- Highlight Org table columns and rows -*- lexical-binding: t; -*-
 
 ;; Author: Lei Zhe
+;; URL: https://github.com/llcc/org-table-highlight
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "27.1"))
-;; Keywords: outlines, tables, convenience
+;; Keywords: org-table, convenience
 
 ;;; Commentary:
 
@@ -17,10 +18,10 @@
   '("#FFE4B5" "#C1FFC1" "#B0E0E6" "#FFB6C1" "#D8BFD8" "#F4A460" "#ADD8E6")
   "List of pastel colors used to highlight Org table columns and rows.")
 
-(defvar-local org-table-highlighted-columns 0
+(defvar-local org-table-highlight--highlighted-columns 0
   "Number of Org table columns currently highlighted.")
 
-(defvar-local org-table-highlighted-rows 0
+(defvar-local org-table-highlight--highlighted-rows 0
   "Number of Org table rows currently highlighted.")
 
 (defvar org-table-highlight--metadata nil
@@ -40,7 +41,7 @@ Format is:
 
 (defun org-table-highlight--next-color ()
   "Return the next color from the palette using COUNTER."
-  (nth (mod org-table-highlighted-columns
+  (nth (mod org-table-highlight--highlighted-columns
             (length org-table-highlight-color-palette))
        org-table-highlight-color-palette))
 
@@ -87,7 +88,7 @@ With \\[universal-argument] prefix, prompt for color."
            (col (org-table-current-column))
            (chosen-color (or color (org-table-highlight--next-color)))
            (bounds (org-table-highlight--table-bounds)))
-      (cl-incf org-table-highlighted-columns)
+      (cl-incf org-table-highlight--highlighted-columns)
       (if table-name
           (org-table-highlight--update-metadata buf-name table-name :col col chosen-color)
         (message "Consider adding #+NAME: for this table to persist highlights."))
@@ -122,7 +123,7 @@ With \\[universal-argument] prefix, prompt for color."
            (chosen-color (or color (org-table-highlight--next-color)))
            (start (line-beginning-position))
            (end (line-end-position)))
-      (cl-incf org-table-highlighted-rows)
+      (cl-incf org-table-highlight--highlighted-rows)
       (if table-name
           (org-table-highlight--update-metadata buf-name table-name :row row chosen-color)
         (message "Consider adding #+NAME: for this table to persist highlights."))
@@ -310,7 +311,7 @@ TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the highligh
                         (color (cdr col-entry)))
                     (org-table-goto-column col)
                     (org-table-highlight-column color)
-                    (cl-decf org-table-highlighted-columns)))
+                    (cl-decf org-table-highlight--highlighted-columns)))
                 ;; Apply rows
                 (dolist (row-entry (plist-get plist :row))
                   (let ((row (car row-entry))
@@ -318,7 +319,7 @@ TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the highligh
                     (goto-char (org-table-begin))
                     (forward-line (1- row))
                     (org-table-highlight-row color)
-                    (cl-decf org-table-highlighted-rows)))))))))))
+                    (cl-decf org-table-highlight--highlighted-rows)))))))))))
 
 (add-hook 'after-init-hook #'org-table-highlight-load-metadata)
 (add-hook 'org-mode-hook #'org-table-highlight-apply-buffer-metadata)
