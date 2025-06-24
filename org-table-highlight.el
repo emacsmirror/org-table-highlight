@@ -2,7 +2,7 @@
 
 ;; Author: Lei Zhe
 ;; URL: https://github.com/llcc/org-table-highlight
-;; Version: 0.1
+;; Version: 0.2
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: org-table, convenience
 
