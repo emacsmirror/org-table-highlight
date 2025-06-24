@@ -38,9 +38,10 @@ Format is:
     (cons (save-excursion (org-table-begin))
           (save-excursion (org-table-end)))))
 
-(defun org-table-highlight--next-color (counter)
+(defun org-table-highlight--next-color ()
   "Return the next color from the palette using COUNTER."
-  (nth (mod counter (length org-table-highlight-color-palette))
+  (nth (mod org-table-highlighted-columns
+            (length org-table-highlight-color-palette))
        org-table-highlight-color-palette))
 
 (defun org-table-highlight--make-overlay (start end face-prop symbol val)
@@ -63,17 +64,27 @@ Format is:
                     (org-element-context) 'table t))
     (plist-get (cadr table) :name)))
 
+(defun org-table-highlight--overlayp (prop &optional value)
+  "Return non-nil if an overlay with PROP (and optional VALUE) exists at point.
+
+PROP should be either 'org-table-highlight-column or 'org-table-highlight-row.
+If VALUE is non-nil, only return true if PROP equals VALUE."
+  (cl-some (lambda (ov)
+             (let ((ov-val (overlay-get ov prop)))
+               (and ov-val (or (not value) (equal ov-val value)))))
+           (overlays-at (point))))
+
 (defun org-table-highlight-column (&optional color)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
 With \\[universal-argument] prefix, prompt for color."
   (interactive
    (list (when current-prefix-arg (read-color "Column color: " t))))
-  (when (org-at-table-p)
+  (when (and (org-at-table-p)
+             (not (org-table-highlight--overlayp 'org-table-highlight-column)))
     (let* ((buf-name (buffer-name))
            (table-name (org-table-highlight--get-table-name))
            (col (org-table-current-column))
-           (chosen-color (or color
-                             (org-table-highlight--next-color org-table-highlighted-columns)))
+           (chosen-color (or color (org-table-highlight--next-color)))
            (bounds (org-table-highlight--table-bounds)))
       (cl-incf org-table-highlighted-columns)
       (if table-name
@@ -92,10 +103,9 @@ With \\[universal-argument] prefix, prompt for color."
                 (setq pos (point))
                 (setq i (1+ i)))
               (when (re-search-forward "[|\\|+]" line-end t)
-                (org-table-highlight--remove-overlays pos (1- (point)) 'org-table-highlight-column col)
-                (org-table-highlight--make-overlay pos (point)
-                                                   `(:background ,chosen-color)
-                                                   'org-table-highlight-column col)))
+                  (org-table-highlight--make-overlay pos (1- (point))
+                                                     `(:background ,chosen-color)
+                                                     'org-table-highlight-column col)))
             (forward-line 1)))))))
 
 (defun org-table-highlight-row (&optional color)
@@ -103,21 +113,21 @@ With \\[universal-argument] prefix, prompt for color."
 With \\[universal-argument] prefix, prompt for color."
   (interactive
    (list (when current-prefix-arg (read-color "Row color: " t))))
-  (when (org-at-table-p)
+  (when (and (org-at-table-p)
+             (not (org-table-highlight--overlayp 'org-table-highlight-row)))
     (let* ((buf-name (buffer-name))
            (table-name (org-table-highlight--get-table-name))
            (row (org-table-current-line))
-           (chosen-color (or color
-                             (org-table-highlight--next-color org-table-highlighted-rows)))
+           (chosen-color (or color (org-table-highlight--next-color)))
            (start (line-beginning-position))
            (end (line-end-position)))
       (cl-incf org-table-highlighted-rows)
       (if table-name
           (org-table-highlight--update-metadata buf-name table-name :row row chosen-color)
         (message "Consider adding #+NAME: for this table to persist highlights."))
-      (org-table-highlight--remove-overlays start end 'org-table-highlight-row)
-      (org-table-highlight--make-overlay start end `(:background ,chosen-color)
-                                         'org-table-highlight-row row))))
+      (unless (org-table-highlight--overlayp 'org-table-highlight-row)
+        (org-table-highlight--make-overlay start end `(:background ,chosen-color)
+                                           'org-table-highlight-row row)))))
 
 (defun org-table-highlight-restore ()
   "Restore highlights for the Org table at point using stored metadata."
@@ -129,17 +139,13 @@ With \\[universal-argument] prefix, prompt for color."
       (let* ((table-list (cadr buf-entry))
              (table-entry (assoc table-name table-list)))
 
-        ;; Clear existing highlights in this table first
-        (org-table-highlight-clear-all-highlights)
-
         ;; Reapply column highlights
         (dolist (col-entry (plist-get (cdr table-entry) :col))
           (let ((col (car col-entry))
                 (color (cdr col-entry)))
             (save-excursion
               (org-table-goto-column col)
-              (org-table-highlight-column color))
-            (cl-decf org-table-highlighted-columns)))
+              (org-table-highlight-column color))))
 
         ;; Reapply row highlights
         (dolist (row-entry (plist-get (cdr table-entry) :row))
@@ -148,8 +154,7 @@ With \\[universal-argument] prefix, prompt for color."
             (save-excursion
               (goto-char (org-table-begin))
               (forward-line (1- row))
-              (org-table-highlight-row color))
-            (cl-decf org-table-highlighted-rows)))))))
+              (org-table-highlight-row color))))))))
 
 (advice-add 'org-table-align :after #'org-table-highlight-restore)
 (advice-add 'org-table-next-field :after #'org-table-highlight-restore)
@@ -158,16 +163,17 @@ With \\[universal-argument] prefix, prompt for color."
   "Clear highlights in current Org table column.
 With prefix argument ALL, clear all column highlights."
   (interactive "P")
-  (when-let ((buf-name (buffer-name))
-             (table-name (org-table-highlight--get-table-name))
-             (bounds (org-table-highlight--table-bounds)))
-    (let ((col (org-table-current-column)))
-      (org-table-highlight--remove-metadata
-       buf-name table-name :col (or all col))
-      (org-table-highlight--remove-overlays
-       (car bounds) (cdr bounds)
-       'org-table-highlight-column
-       (unless all col)))))
+  (when (org-table-highlight--overlayp 'org-table-highlight-column)
+    (when-let ((buf-name (buffer-name))
+               (table-name (org-table-highlight--get-table-name))
+               (bounds (org-table-highlight--table-bounds)))
+      (let ((col (org-table-current-column)))
+        (org-table-highlight--remove-metadata
+         buf-name table-name :col (or all col))
+        (org-table-highlight--remove-overlays
+         (car bounds) (cdr bounds)
+         'org-table-highlight-column
+         (unless all col))))))
 
 (defun org-table-highlight-clear-row-highlights (&optional all)
   "Clear highlights in current Org table row.
