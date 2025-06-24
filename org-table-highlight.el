@@ -202,7 +202,7 @@ With prefix argument ALL, clear all row highlights."
 
 (defun org-table-highlight--update-metadata (buf-name table-name type index color)
   "Update highlight metadata for BUF-NAME and TABLE-NAME.
-TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight color."
+TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the highlight color."
   (let ((buf-entry (assoc buf-name org-table-highlight--metadata)))
     (if buf-entry
         (let* ((table-list (cadr buf-entry))
@@ -249,12 +249,13 @@ TYPE is :col or :row. INDEX is the column or row number. COLOR is the highlight 
     new-plist))
 
 (defun org-table-highlight--remove-metadata (buf-name table-name type &optional index)
-  "Remove highlight metadata from `org-table-highlight--metadata`.
+  "Remove highlight metadata from `org-table-highlight--metadata'.
 
 - If TYPE and INDEX are non-nil: remove the specific INDEX under TYPE.
 - If TYPE is non-nil and INDEX is nil: remove all entries under TYPE.
-- If both TYPE and INDEX are nil: remove the entire TABLE-NAME entry from BUF-NAME.
-- If BUF-NAME has no tables left, remove BUF-NAME from metadata."
+- If both TYPE and INDEX are nil: remove the entire TABLE-NAME entry
+- from BUF-NAME.  If BUF-NAME has no tables left, remove BUF-NAME from
+  metadata."
   (let ((buf-entry (assoc buf-name org-table-highlight--metadata)))
     (when buf-entry
       (let ((table-entry (assoc table-name (cadr buf-entry))))
