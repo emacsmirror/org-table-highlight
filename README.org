@@ -9,10 +9,14 @@ Designed for enhanced readability and interactive table highlighting.
 * Features
 
 - Highlight the current column or row in an Org-mode table
-- Cycle through a pastel color palette
+- Cycle through a pastel color palette or custom color with ~C-u~ prefix.
+- Highlight state is saved per buffer and table if table has a ~#+NAME:~
+- Highlights are automatically restored:
+  - When visiting buffers
+  - After ~org-table-align~ or table navigation
 - All highlights are done using *non-intrusive overlays*
 - Clear row/column highlights individually or entirely
-
+  
 [[file:demo.jpg]]
 
 * Installation
@@ -53,6 +57,8 @@ Customize the color palette by modifying this variable:
       '("#FFFACD" "#E0FFFF" "#FFCCCC" "#E6E6FA"))
 #+end_src
 
+The highlights are stored in =org-table-highlight-metadata-file= which defaults to =~/.emacs.d/org-table-highlight-metadata.el=.
+Feel free to change the path.
 
 * License
 
