@@ -95,7 +95,7 @@ With \\[universal-argument] prefix, prompt for color."
                 (setq i (1+ i)))
               (when (re-search-forward "[|\\|+]" line-end t)
                 (org-table-highlight--remove-overlays pos (1- (point)) 'org-table-highlight-column col)
-                (org-table-highlight--make-overlay pos (1- (point))
+                (org-table-highlight--make-overlay pos (point)
                                                    `(:background ,chosen-color)
                                                    'org-table-highlight-column col)))
             (forward-line 1)))))))
