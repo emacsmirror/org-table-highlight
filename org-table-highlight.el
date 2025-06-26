@@ -66,7 +66,6 @@ Format is:
                (or (not value) (equal (overlay-get ov prop) value)))
       (delete-overlay ov))))
 
-
 (defun org-table-highlight--get-table-name ()
   "Try to get the Org table name via #+NAME."
   (when-let (table (org-element-lineage
@@ -83,6 +82,38 @@ If VALUE is non-nil, only return true if PROP equals VALUE."
                (and ov-val (or (not value) (equal ov-val value)))))
            (overlays-at (point))))
 
+(defcustom org-table-highlight-table-context-length 20
+  "Number of characters before and after an Org table to save as context.
+
+This context helps identify the table uniquely when it lacks a `#+NAME:`
+property. It is used to match and restore highlights across sessions
+by storing a short prefix and suffix string around the table position."
+  :type 'integer
+  :group 'org-table-highlight)
+
+(defun org-table-highlight--table-context ()
+  "Return contextual metadata for the Org table at point.
+
+This includes the table's name (if any), a short string before the table,
+and a short string after it, used to help identify the table if it has
+no `#+NAME:` property. The length of these strings is controlled by
+`org-table-highlight-table-context-length`."
+  (when (org-at-table-p)
+    (save-excursion
+      (let* ((table-name (org-table-highlight--get-table-name))
+             (begin (org-table-begin))
+             (before-string
+              (buffer-substring-no-properties
+               (max (point-min) (- begin org-table-highlight-table-context-length))
+               begin))
+             (after-string
+              (buffer-substring-no-properties
+               begin
+               (min (point-max) (+ begin org-table-highlight-table-context-length)))))
+        (list :name table-name
+              :before-string before-string
+              :after-string after-string)))))
+
 ;;;###autoload
 (defun org-table-highlight-column (&optional color)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
@@ -92,14 +123,12 @@ With \\[universal-argument] prefix, prompt for color."
   (when (and (org-at-table-p)
              (not (org-table-highlight--overlayp 'org-table-highlight-column)))
     (let* ((buf-name (buffer-name))
-           (table-name (org-table-highlight--get-table-name))
+           (table-context (org-table-highlight--table-context))
            (col (org-table-current-column))
            (chosen-color (or color (org-table-highlight--next-color)))
            (bounds (org-table-highlight--table-bounds)))
       (cl-incf org-table-highlight--highlighted-columns)
-      (if table-name
-          (org-table-highlight--update-metadata buf-name table-name :col col chosen-color)
-        (message "Consider adding #+NAME: for this table to persist highlights."))
+      (org-table-highlight--update-metadata buf-name table-context :col col chosen-color)
       (save-restriction
         (narrow-to-region (car bounds) (cdr bounds))
         (save-excursion
@@ -127,15 +156,13 @@ With \\[universal-argument] prefix, prompt for color."
   (when (and (org-at-table-p)
              (not (org-table-highlight--overlayp 'org-table-highlight-row)))
     (let* ((buf-name (buffer-name))
-           (table-name (org-table-highlight--get-table-name))
+           (table-context (org-table-highlight--table-context))
            (row (org-table-current-line))
            (chosen-color (or color (org-table-highlight--next-color)))
            (start (line-beginning-position))
            (end (line-end-position)))
       (cl-incf org-table-highlight--highlighted-rows)
-      (if table-name
-          (org-table-highlight--update-metadata buf-name table-name :row row chosen-color)
-        (message "Consider adding #+NAME: for this table to persist highlights."))
+      (org-table-highlight--update-metadata buf-name table-context :row row chosen-color)
       (unless (org-table-highlight--overlayp 'org-table-highlight-row)
         (org-table-highlight--make-overlay start end `(:background ,chosen-color)
                                            'org-table-highlight-row row)))))
@@ -145,10 +172,10 @@ With \\[universal-argument] prefix, prompt for color."
   (interactive)
   (when (org-at-table-p)
     (when-let* ((buf-name (buffer-name))
-                (table-name (org-table-highlight--get-table-name))
+                (table-context (org-table-highlight--table-context))
                 (buf-entry (assoc buf-name org-table-highlight--metadata)))
       (let* ((table-list (cadr buf-entry))
-             (table-entry (assoc table-name table-list)))
+             (table-entry (assoc table-context table-list)))
 
         ;; Reapply column highlights
         (dolist (col-entry (plist-get (cdr table-entry) :col))
@@ -177,11 +204,11 @@ With prefix argument ALL, clear all column highlights."
   (interactive "P")
   (when (or all (org-table-highlight--overlayp 'org-table-highlight-column))
     (when-let ((buf-name (buffer-name))
-               (table-name (org-table-highlight--get-table-name))
+               (table-context (org-table-highlight--table-context))
                (bounds (org-table-highlight--table-bounds)))
       (let ((col (if all nil (org-table-current-column))))
         (org-table-highlight--remove-metadata
-         buf-name table-name :col col)
+         buf-name table-context :col col)
         (org-table-highlight--remove-overlays
          (car bounds) (cdr bounds)
          'org-table-highlight-column col)))))
@@ -193,10 +220,10 @@ With prefix argument ALL, clear all row highlights."
   (interactive "P")
   (when (or all (org-table-highlight--overlayp 'org-table-highlight-column))
     (when-let ((buf-name (buffer-name))
-               (table-name (org-table-highlight--get-table-name))
+               (table-context (org-table-highlight--table-context))
                (bounds (org-table-highlight--table-bounds)))
       (let ((row (if all nil (org-table-current-line))))
-        (org-table-highlight--remove-metadata buf-name table-name :row row)
+        (org-table-highlight--remove-metadata buf-name table-context :row row)
         (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
                                               'org-table-highlight-row row)))))
 
@@ -205,22 +232,22 @@ With prefix argument ALL, clear all row highlights."
   "Clear all column and row highlights in current Org table."
   (interactive)
   (when-let ((buf-name (buffer-name))
-             (table-name (org-table-highlight--get-table-name))
+             (table-context (org-table-highlight--table-context)) 
              (bounds (org-table-highlight--table-bounds)))
-    (org-table-highlight--remove-metadata buf-name table-name nil)
+    (org-table-highlight--remove-metadata buf-name table-context nil)
     (org-table-highlight--remove-overlays
      (car bounds) (cdr bounds) 'org-table-highlight-column)
     (org-table-highlight--remove-overlays
      (car bounds) (cdr bounds) 'org-table-highlight-row)))
 
-(defun org-table-highlight--update-metadata (buf-name table-name type index color)
-  "Update highlight metadata for BUF-NAME and TABLE-NAME.
+(defun org-table-highlight--update-metadata (buf-name table-context type index color)
+  "Update highlight metadata for BUF-NAME and TABLE-CONTEXT.
 TYPE is :col or :row.  INDEX is the column or row number.  COLOR is the
 highlight color."
   (let ((buf-entry (assoc buf-name org-table-highlight--metadata)))
     (if buf-entry
         (let* ((table-list (cadr buf-entry))
-               (table-entry (assoc table-name table-list)))
+               (table-entry (assoc table-context table-list)))
           (if table-entry
               ;; Update existing table entry in place
               (let* ((plist (cdr table-entry))
@@ -234,46 +261,15 @@ highlight color."
                 ;; Modify plist in place by setting cdr of table-entry
                 (setcdr table-entry new-plist))
             ;; Table does not exist, add new entry to table-list in place
-            (when table-name
-              (setcdr buf-entry
-                      (list (append table-list
-                                    (list
-                                     (list table-name type
-                                           (list (cons index color))))))))))
+            (setcdr buf-entry
+                    (list (append table-list
+                                  (list
+                                   (list table-context type
+                                         (list (cons index color)))))))))
       ;; Buffer does not exist, add new buffer entry
-      (push (list buf-name (list (list table-name type (list (cons index color)))))
+      (push (list buf-name (list (list table-context type (list (cons index color)))))
             org-table-highlight--metadata))
     (org-table-highlight-save-metadata)))
-
-(defcustom org-table-highlight-metadata-file
-  (locate-user-emacs-file "org-table-highlight-metadata.el")
-  "File where Org table highlight metadata is saved."
-  :type 'file
-  :group 'org-table-highlight)
-
-(defun org-table-highlight-save-metadata ()
-  "Save `org-table-highlight--metadata` to `org-table-highlight-metadata-file'."
-  (interactive)
-  (with-temp-file org-table-highlight-metadata-file
-    (insert ";;; org-table-highlight saved metadata\n\n")
-    (prin1 `(setq org-table-highlight--metadata
-                  ,org-table-highlight--metadata)
-           (current-buffer))))
-
-(defun org-table-highlight-load-metadata ()
-  "Load Org table highlight metadata from `org-table-highlight-metadata-file'."
-  (interactive)
-  (when (file-exists-p org-table-highlight-metadata-file)
-    (with-temp-buffer
-      (insert-file-contents org-table-highlight-metadata-file)
-      (goto-char (point-min))
-      (let ((form (condition-case nil
-                      (read (current-buffer))
-                    (error nil))))
-        (when (and (consp form)
-                   (eq (car form) 'setq)
-                   (eq (cadr form) 'org-table-highlight--metadata))
-          (setq org-table-highlight--metadata (nth 2 form)))))))
 
 (defun org-table-highlight--remove-plist-key (plist key)
   "Return a copy of PLIST with KEY and its value removed."
@@ -327,6 +323,58 @@ highlight color."
 
   (org-table-highlight-save-metadata))
 
+(defcustom org-table-highlight-metadata-file
+  (locate-user-emacs-file "org-table-highlight-metadata.el")
+  "File where Org table highlight metadata is saved."
+  :type 'file
+  :group 'org-table-highlight)
+
+(defun org-table-highlight-save-metadata ()
+  "Save `org-table-highlight--metadata` to `org-table-highlight-metadata-file'."
+  (interactive)
+  (with-temp-file org-table-highlight-metadata-file
+    (insert ";;; org-table-highlight saved metadata\n\n")
+    (prin1 `(setq org-table-highlight--metadata
+                  ,org-table-highlight--metadata)
+           (current-buffer))))
+
+(defun org-table-highlight-load-metadata ()
+  "Load Org table highlight metadata from `org-table-highlight-metadata-file'."
+  (interactive)
+  (when (file-exists-p org-table-highlight-metadata-file)
+    (with-temp-buffer
+      (insert-file-contents org-table-highlight-metadata-file)
+      (goto-char (point-min))
+      (let ((form (condition-case nil
+                      (read (current-buffer))
+                    (error nil))))
+        (when (and (consp form)
+                   (eq (car form) 'setq)
+                   (eq (cadr form) 'org-table-highlight--metadata))
+          (setq org-table-highlight--metadata (nth 2 form)))))))
+
+(defun org-table-highlight--get-table-position (context)
+  "Get position of table beginning position based on context."
+  (let ((name (plist-get context :name))
+        (before-string (plist-get context :before-string))
+        (after-string (plist-get context :after-string))
+        point)
+
+    (if name
+        (progn (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote name)) nil t)
+               (setq point (1+ (point))))
+       
+      (if (and before-string (search-forward before-string (point-max) t))
+          (progn
+            (goto-char (match-end 0))
+            (setq point (point))))
+        
+      (if (and after-string (search-forward after-string (point-max) t))
+          (progn
+            (goto-char (match-beginning 0))
+            (setq point (point)))))
+    point))
+
 ;;;###autoload
 (defun org-table-highlight-apply-buffer-metadata ()
   "Apply highlight metadata to all tables in the current buffer."
@@ -335,28 +383,25 @@ highlight color."
          (buf-entry (assoc buf-name org-table-highlight--metadata)))
     (when buf-entry
       (dolist (table-entry (cadr buf-entry))
-        (let ((table-name (car table-entry))
-              (plist (cdr table-entry)))
+        (let* ((table-context (car table-entry))
+               (pos (org-table-highlight--get-table-position table-context))
+               (plist (cdr table-entry)))
           (save-excursion
-            (goto-char (point-min))
-            (when (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote table-name)) nil t)
-              (forward-line 1)
-              (when (org-at-table-p)
-                ;; Apply columns
-                (dolist (col-entry (plist-get plist :col))
-                  (let ((col (car col-entry))
-                        (color (cdr col-entry)))
-                    (org-table-goto-column col)
-                    (org-table-highlight-column color)
-                    (cl-decf org-table-highlight--highlighted-columns)))
-                ;; Apply rows
-                (dolist (row-entry (plist-get plist :row))
-                  (let ((row (car row-entry))
-                        (color (cdr row-entry)))
-                    (goto-char (org-table-begin))
-                    (forward-line (1- row))
-                    (org-table-highlight-row color)
-                    (cl-decf org-table-highlight--highlighted-rows)))))))))))
+            (when (and pos (goto-char pos))
+              ;; Apply columns
+              (dolist (col-entry (plist-get plist :col))
+                (let ((col (car col-entry))
+                      (color (cdr col-entry)))
+                  (org-table-goto-column col)
+                  (org-table-highlight-column color)))
+
+              ;; Apply rows
+              (dolist (row-entry (plist-get plist :row))
+                (let ((row (car row-entry))
+                      (color (cdr row-entry)))
+                  (goto-char (org-table-begin))
+                  (forward-line (1- row))
+                  (org-table-highlight-row color))))))))))
 
 (add-hook 'after-init-hook #'org-table-highlight-load-metadata)
 (add-hook 'org-mode-hook #'org-table-highlight-apply-buffer-metadata)
