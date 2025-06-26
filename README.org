@@ -9,11 +9,11 @@ Designed for enhanced readability and interactive table highlighting.
 * Features
 
 - Highlight the current column or row in an Org-mode table
-- Cycle through a pastel color palette or custom color with ~C-u~ prefix.
-- Highlight state is saved per buffer and table if table has a ~#+NAME:~
+- Highlights persist across sessions using table name or structural context
+- Cycle through a pastel color palette or custom color with ~C-u~ prefix
 - Highlights are automatically restored:
-  - When visiting buffers
-  - After ~org-table-align~ or table navigation
+  + When visiting buffers
+  + After ~org-table-align~ or table navigation
 - All highlights are done using *non-intrusive overlays*
 - Clear row/column highlights individually or entirely
   
@@ -55,6 +55,14 @@ Customize the color palette by modifying this variable:
 #+begin_src emacs-lisp
 (setq org-table-highlight-color-palette
       '("#FFFACD" "#E0FFFF" "#FFCCCC" "#E6E6FA"))
+#+end_src
+
+If a table doesn't have a `#+NAME:`, highlights will still be restored using surrounding context (`before-string` and `after-string`).
+You can improve reliability by optionally adding `#+NAME:` to important tables.
+To control how much context is saved around unnamed tables:
+
+#+begin_src emacs-lisp
+(setq org-table-highlight-table-context-length 20)
 #+end_src
 
 The highlights are stored in =org-table-highlight-metadata-file= which defaults to =~/.emacs.d/org-table-highlight-metadata.el=.
