@@ -219,7 +219,7 @@ With prefix argument ALL, clear all column highlights."
   "Clear highlights in current Org table row.
 With prefix argument ALL, clear all row highlights."
   (interactive "P")
-  (when (or all (org-table-highlight--overlayp 'org-table-highlight-column))
+  (when (or all (org-table-highlight--overlayp 'org-table-highlight-row))
     (when-let ((buf-name (buffer-name))
                (table-context (org-table-highlight--table-context))
                (bounds (org-table-highlight--table-bounds)))
