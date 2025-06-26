@@ -21,11 +21,14 @@ Designed for enhanced readability and interactive table highlighting.
 
 * Installation
 
-Via =use-package=:
+Via =use-package= for Emacs 30:
 
 #+begin_src emacs-lisp
 (use-package org-table-highlight
-  :vc (:url "https://www.github.com/llcc/org-table-highlight" :rev :newest))
+  :vc (:url "https://www.github.com/llcc/org-table-highlight" :rev :newest)
+  :config
+  (add-hook 'after-init-hook #'org-table-highlight-load-metadata)
+  (add-hook 'org-mode-hook #'org-table-highlight-apply-buffer-metadata))
 #+end_src
 
 Or manually:
