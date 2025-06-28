@@ -502,7 +502,7 @@ Modifies ENTRY or ENTRIES in place depending on the condition."
     ('delete
      (cond
       ((= index _index)
-       (remove entry entries))
+       (setq entries (remove entry entries)))
       ((> index _index)
        (setcar entry (1- index)))))
     ((or 'left 'up)
@@ -511,7 +511,7 @@ Modifies ENTRY or ENTRIES in place depending on the condition."
        (setcar entry (1+ index)))
       ((= index (1+ _index))
        (setcar entry (1- index)))))
-    ('nil
+    ((or 'right 'down)
      (cond
       ((= index _index)
        (setcar entry (1- index)))
@@ -542,20 +542,22 @@ This function is intended to be called after structural edits (e.g., with
     (when-let* ((buf-name (buffer-name))
                 (table-context (org-table-highlight--table-context))
                 (table-list (cadr (assoc buf-name org-table-highlight--metadata))))
-      (let* ((_column (org-table-current-column))
-             (col-alist (org-table-highlight--find-index-by-context
-                         table-list table-context))
-             (col-entries (plist-get col-alist :col)))
-        (dolist (col-entry col-entries)
-          (let ((col (car col-entry)))
-            (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries))))
+      (unless (member handle '(up down))
+       (let* ((_column (org-table-current-column))
+              (col-alist (org-table-highlight--find-index-by-context
+                          table-list table-context))
+              (col-entries (plist-get col-alist :col)))
+         (dolist (col-entry col-entries)
+           (let ((col (car col-entry)))
+             (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries)))))
 
-      (let* ((_row (org-table-current-line))
-             (row-alist (org-table-highlight--find-index-by-context table-list table-context))
-             (row-entries (plist-get row-alist :row)))
-        (dolist (row-entry row-entries)
-          (let ((row (car row-entry)))
-            (org-table-highlight--fix-indice-1 row _row handle row-entry row-entries))))
+      (unless (member handle '(left right))
+        (let* ((_row (org-table-current-line))
+               (row-alist (org-table-highlight--find-index-by-context table-list table-context))
+               (row-entries (plist-get row-alist :row)))
+          (dolist (row-entry row-entries)
+            (let ((row (car row-entry)))
+              (org-table-highlight--fix-indice-1 row _row handle row-entry row-entries)))))
       
       (org-table-highlight-clear-all-highlights 'keep-metadata)
       (org-table-highlight-restore)
@@ -566,14 +568,18 @@ This function is intended to be called after structural edits (e.g., with
 (advice-add 'org-table-delete-column
             :after #'(lambda () (org-table-highlight--fix-indice 'delete)))
 (advice-add 'org-table-move-column
-            :after #'(lambda (&optional move) (org-table-highlight--fix-indice move)))
+            :after #'(lambda (&optional move)
+                       (let ((move (if move move 'right)))
+                         (org-table-highlight--fix-indice move))))
 
 (advice-add 'org-table-insert-row
             :after #'(lambda () (org-table-highlight--fix-indice 'insert)))
 (advice-add 'org-table-delete-row
             :after #'(lambda () (org-table-highlight--fix-indice 'delete)))
 (advice-add 'org-table-move-row
-            :after #'(lambda (&optional move) (org-table-highlight--fix-indice move)))
+            :after #'(lambda (&optional move)
+                       (let ((move (if move move 'down)))
+                         (org-table-highlight--fix-indice move))))
 
 (provide 'org-table-highlight)
 ;;; org-table-highlight.el ends here
