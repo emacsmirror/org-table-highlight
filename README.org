@@ -14,6 +14,7 @@ Designed for enhanced readability and interactive table highlighting.
 - Highlights are automatically restored:
   + When visiting buffers
   + After ~org-table-align~ or table navigation
+- Persist highlights while table constructual editings
 - All highlights are done using *non-intrusive overlays*
 - Clear row/column highlights individually or entirely
   
