@@ -496,7 +496,7 @@ HANDLE specifies the type of operation, one of:
 Modifies ENTRY or ENTRIES in place depending on the condition."
   (message (format "index: %d, _index: %d" index _index))
   (pcase handle
-    ('insert
+    ((or 'above 'insert)
      (when (>= index _index)
        (setcar entry (1+ index))))
     ('delete
@@ -542,7 +542,7 @@ This function is intended to be called after structural edits (e.g., with
     (when-let* ((buf-name (buffer-name))
                 (table-context (org-table-highlight--table-context))
                 (table-list (cadr (assoc buf-name org-table-highlight--metadata))))
-      (unless (member handle '(up down))
+      (unless (member handle '(up down below above))
        (let* ((_column (org-table-current-column))
               (col-alist (org-table-highlight--find-index-by-context
                           table-list table-context))
@@ -569,17 +569,16 @@ This function is intended to be called after structural edits (e.g., with
             :after #'(lambda () (org-table-highlight--fix-indice 'delete)))
 (advice-add 'org-table-move-column
             :after #'(lambda (&optional move)
-                       (let ((move (if move move 'right)))
-                         (org-table-highlight--fix-indice move))))
+                       (org-table-highlight--fix-indice (or move 'right))))
 
 (advice-add 'org-table-insert-row
-            :after #'(lambda () (org-table-highlight--fix-indice 'insert)))
+            :after #'(lambda (&optional arg)
+                       (org-table-highlight--fix-indice (if arg 'below 'above))))
 (advice-add 'org-table-delete-row
             :after #'(lambda () (org-table-highlight--fix-indice 'delete)))
 (advice-add 'org-table-move-row
             :after #'(lambda (&optional move)
-                       (let ((move (if move move 'down)))
-                         (org-table-highlight--fix-indice move))))
+                       (org-table-highlight--fix-indice (or move 'down))))
 
 (provide 'org-table-highlight)
 ;;; org-table-highlight.el ends here
