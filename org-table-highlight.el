@@ -494,7 +494,6 @@ HANDLE specifies the type of operation, one of:
     → If highlight is at _INDEX, decrement its index (it moved left).
 
 Modifies ENTRY or ENTRIES in place depending on the condition."
-  (message (format "index: %d, _index: %d" index _index))
   (pcase handle
     ((or 'above 'insert)
      (when (>= index _index)
