@@ -366,16 +366,16 @@ highlight color."
         point)
 
     (goto-char (point-min))
-    
+
     (if name
         (progn (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote name)) nil t)
                (setq point (1+ (point))))
-       
+
       (if (and before-string (search-forward before-string (point-max) t))
           (progn
             (goto-char (match-end 0))
             (setq point (point))))
-        
+
       (if (and after-string (search-forward after-string (point-max) t))
           (progn
             (goto-char (match-beginning 0))
@@ -426,14 +426,10 @@ or nil if there are no highlight overlays."
       (let ((col (overlay-get ov 'org-table-highlight-column))
             (row (overlay-get ov 'org-table-highlight-row))
             (face (overlay-get ov 'face)))
-        (let ((color (cond
-                      ((and (listp face) (plist-get face :background))
-                       (plist-get face :background))
-                      ((and (symbolp face) (facep face))
-                       (face-background face nil t)))))
-          (when (and col color)
+        (let ((color (plist-get face :background)))
+          (when (and col (color-defined-p color))
             (cl-pushnew (cons col color) col-alist :test #'equal))
-          (when (and row color)
+          (when (and row (color-defined-p color))
             (cl-pushnew (cons row color) row-entries :test #'equal)))))
     (when (or col-alist row-entries)
       (save-excursion
@@ -518,7 +514,7 @@ Modifies ENTRY or ENTRIES in place depending on the condition."
        (setcar entry (1+ index)))))))
 
 (defun org-table-highlight--fix-indice (handle)
-   "Update highlight metadata after a table column or row is inserted or deleted.
+  "Update highlight metadata after a table column or row is inserted or deleted.
 
 HANDLE must be either 'insert or 'delete. This function adjusts the metadata
 for the currently active Org table in `org-table-highlight--metadata` to reflect
@@ -542,13 +538,13 @@ This function is intended to be called after structural edits (e.g., with
                 (table-context (org-table-highlight--table-context))
                 (table-list (cadr (assoc buf-name org-table-highlight--metadata))))
       (unless (member handle '(up down below above))
-       (let* ((_column (org-table-current-column))
-              (col-alist (org-table-highlight--find-index-by-context
-                          table-list table-context))
-              (col-entries (plist-get col-alist :col)))
-         (dolist (col-entry col-entries)
-           (let ((col (car col-entry)))
-             (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries)))))
+        (let* ((_column (org-table-current-column))
+               (col-alist (org-table-highlight--find-index-by-context
+                           table-list table-context))
+               (col-entries (plist-get col-alist :col)))
+          (dolist (col-entry col-entries)
+            (let ((col (car col-entry)))
+              (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries)))))
 
       (unless (member handle '(left right))
         (let* ((_row (org-table-current-line))
@@ -557,7 +553,7 @@ This function is intended to be called after structural edits (e.g., with
           (dolist (row-entry row-entries)
             (let ((row (car row-entry)))
               (org-table-highlight--fix-indice-1 row _row handle row-entry row-entries)))))
-      
+
       (org-table-highlight-clear-all-highlights 'keep-metadata)
       (org-table-highlight-restore)
       (org-table-highlight--collect-buffer-metadata))))
