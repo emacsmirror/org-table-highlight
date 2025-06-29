@@ -343,9 +343,6 @@ With \\[universal-argument] prefix, prompt for color."
             (org-table-goto-line row)
             (org-table-highlight-row color)))))))
 
-(advice-add 'org-table-align :after #'org-table-highlight-restore)
-(advice-add 'org-table-next-field :after #'org-table-highlight-restore)
-
 ;;;###autoload
 (defun org-table-highlight-clear-column-highlights (&optional all)
   "Clear highlights in current Org table column.
@@ -637,23 +634,6 @@ This function is intended to be called after structural edits (e.g., with
           (org-table-highlight-restore)
           (org-table-highlight--collect-buffer-metadata))))))
 
-(advice-add 'org-table-insert-column
-            :after #'(lambda () (org-table-highlight--fix-indice 'insert)))
-(advice-add 'org-table-delete-column
-            :after #'(lambda () (org-table-highlight--fix-indice 'delete-column)))
-(advice-add 'org-table-move-column
-            :after #'(lambda (&optional move)
-                       (org-table-highlight--fix-indice (or move 'right))))
-
-(advice-add 'org-table-insert-row
-            :after #'(lambda (&optional arg)
-                       (org-table-highlight--fix-indice (if arg 'below 'above))))
-(advice-add 'org-table-kill-row
-            :after #'(lambda () (org-table-highlight--fix-indice 'delete-row)))
-(advice-add 'org-table-move-row
-            :after #'(lambda (&optional move)
-                       (org-table-highlight--fix-indice (or move 'down))))
-
 (defun org-table-highlight-clear-buffer-overlays ()
   "Remove all Org table highlight overlays in the current buffer.
 
@@ -735,7 +715,7 @@ When disabled:
 
       (remove-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata t)
 
-      (message "org-table-highlight-mode disabled: all highlights and metadata cleared."))))
+      (message "org-table-highlight-mode disabled: all highlights and metadata cleared, while highlights metadata uncleared.."))))
 
 (provide 'org-table-highlight)
 ;;; org-table-highlight.el ends here
