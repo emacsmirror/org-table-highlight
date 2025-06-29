@@ -32,13 +32,60 @@
   "Number of Org table rows currently highlighted.")
 
 (defvar org-table-highlight--metadata nil
-  "Metadata for Org table highlights.
+  "Global metadata for Org table highlights across buffers.
 
-Format is:
+This variable holds persistent information about highlighted rows and columns
+in Org-mode tables, so highlights can be restored after buffer reloads or Emacs restarts.
+
+Structure:
+
   ((BUFFER-NAME
-     (((:name TABLE-NAME :before-string STR :after-string STR)
-       :col ((COL COLOR) ...) :row ((ROW COLOR) ...)))
-   ...))")
+     (OTHM-TABLE ...)
+   )
+   ...)
+
+Where:
+- BUFFER-NAME is a string (not a buffer object), e.g., \"notes.org\".
+- Each OTHM-TABLE is a struct of type `othm-table`, describing highlight state
+  for a specific Org table in that buffer.
+
+Each `othm-table` contains:
+
+  - `:context` — an `othm-context` struct that uniquely identifies the table:
+      - `:name` (string or nil): the `#+NAME:` of the table if available.
+      - `:before-string`: string content before the table (used for matching).
+      - `:after-string`: string content after the table (used for matching).
+
+  - `:col-highlights` — a list of highlighted columns:
+      ((COLUMN-INDEX . COLOR) ...), where:
+        - COLUMN-INDEX is an integer (1-based)
+        - COLOR is a string like \"#FFB6C1\"
+
+  - `:row-highlights` — a list of highlighted rows:
+      ((ROW-INDEX . COLOR) ...), where:
+        - ROW-INDEX is an integer (1-based)
+        - COLOR is a string like \"#ADD8E6\"
+
+Example:
+
+  ((\"notes.org\"
+     (#s(othm-table
+         :context #s(othm-context
+                    :name \"my-table\"
+                    :before-string \"Text before the table\"
+                    :after-string \"Text after the table\")
+         :col-highlights ((2 . \"#FFB6C1\") (3 . \"#D8BFD8\"))
+         :row-highlights ((1 . \"#ADD8E6\") (4 . \"#FFE4B5\")))))
+   (\"tasks.org\" ...)
+   ...)
+
+This variable is updated when:
+- Applying or removing column/row highlights
+- Modifying table structure (inserting/deleting/moving rows/columns)
+- Collecting metadata on buffer kill
+
+It is saved to disk using `org-table-highlight-save-metadata`
+and restored using `org-table-highlight-load-metadata`.")
 
 (cl-defstruct
     (othm-context
@@ -113,19 +160,19 @@ If REMOVE is non-nil, remove the entry instead of adding."
                              new-entry)))))
     (when table-meta
       (let ((setf-fn (if (eq type 'col)
-                             (lambda (tbl val) (setf (othm-table-col-highlights tbl) val))
+                         (lambda (tbl val) (setf (othm-table-col-highlights tbl) val))
                        (lambda (tbl val) (setf (othm-table-row-highlights tbl) val)))))
-       (if (null index)
-           ;; Remove whole table
-           (when remove (funcall setf-fn table-meta nil))
-         ;; Modify highlights based on TYPE
-         (let* ((getf (if (eq type 'col) #'othm-table-col-highlights #'othm-table-row-highlights))
-                (existing (funcall getf table-meta))
-                (filtered (cl-remove-if (lambda (x) (= (car x) index)) existing)))
-           (funcall setf-fn table-meta
-                    (if remove
-                        filtered
-                      (cons (cons index color) filtered))))))
+        (if (null index)
+            ;; Remove whole table
+            (when remove (funcall setf-fn table-meta nil))
+          ;; Modify highlights based on TYPE
+          (let* ((getf (if (eq type 'col) #'othm-table-col-highlights #'othm-table-row-highlights))
+                 (existing (funcall getf table-meta))
+                 (filtered (cl-remove-if (lambda (x) (= (car x) index)) existing)))
+            (funcall setf-fn table-meta
+                     (if remove
+                         filtered
+                       (cons (cons index color) filtered))))))
 
       ;; Clean up table if both highlights are empty
       (when (and (null (othm-table-col-highlights table-meta))
@@ -160,7 +207,7 @@ If REMOVE is non-nil, remove the entry instead of adding."
     ov))
 
 (defun org-table-highlight--remove-overlays (start end prop &optional value)
-"Delete overlays between START and END that have PROP (and optionally VALUE)."
+  "Delete overlays between START and END that have PROP (and optionally VALUE)."
   (dolist (ov (overlays-in start end))
     (when (and (overlay-get ov prop)
                (or (not value) (equal (overlay-get ov prop) value)))
@@ -278,14 +325,14 @@ With \\[universal-argument] prefix, prompt for color."
                 (table-context (org-table-highlight--table-context))
                 (buf-meta (othm--get-buffer buffer-name))
                 (table-meta (othm--get-table buf-meta table-context)))
-      
+
       ;; Reapply column highlights
       (dolist (col-entry (othm-table-col-highlights table-meta))
-          (let ((col (car col-entry))
-                (color (cdr col-entry)))
-            (save-excursion
-              (org-table-goto-column col)
-              (org-table-highlight-column color))))
+        (let ((col (car col-entry))
+              (color (cdr col-entry)))
+          (save-excursion
+            (org-table-goto-column col)
+            (org-table-highlight-column color))))
 
       ;; Reapply row highlights
       (dolist (row-entry (othm-table-row-highlights table-meta))
@@ -324,7 +371,7 @@ With prefix argument ALL, clear all row highlights."
                (table-context (org-table-highlight--table-context))
                (bounds (org-table-highlight--table-bounds)))
       (let ((row (if all nil (org-table-current-line))))
-        (othm-add/remove-highlight buf-name table-context 'row row nil 'remove) 
+        (othm-add/remove-highlight buf-name table-context 'row row nil 'remove)
         (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
                                               'org-table-highlight-row row)))))
 
@@ -461,7 +508,7 @@ or nil if there are no highlight overlays."
         (let ((context (org-table-highlight--table-context)))
           (make-othm-table
            :context context
-           :col-highlights (nreverse col-alist) 
+           :col-highlights (nreverse col-alist)
            :row-highlights (nreverse row-entries)))))))
 
 (defun org-table-highlight--collect-buffer-metadata ()
@@ -576,7 +623,7 @@ This function is intended to be called after structural edits (e.g., with
             (dolist (col-highlight col-highlights)
               (let ((col (car col-highlight)))
                 (org-table-highlight--fix-indice-1 col _column handle col-highlight table-meta)))))
-       
+
         (unless (member handle '(left right delete-column)) ;; ignore column editing operations
           (when-let* ((_row (org-table-current-line))
                       (row-highlights (othm-table-row-highlights table-meta)))
