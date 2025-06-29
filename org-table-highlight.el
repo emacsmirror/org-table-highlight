@@ -654,5 +654,86 @@ This function is intended to be called after structural edits (e.g., with
             :after #'(lambda (&optional move)
                        (org-table-highlight--fix-indice (or move 'down))))
 
+(defun org-table-highlight-clear-buffer-overlays ()
+  "Remove all Org table highlight overlays in the current buffer.
+
+This includes both column and row highlights, regardless of table context."
+  (interactive)
+  (remove-overlays (point-min) (point-max) 'org-table-highlight-column t)
+  (remove-overlays (point-min) (point-max) 'org-table-highlight-row t)
+  (message "All Org table highlight overlays removed from buffer."))
+
+;;;###autoload
+(define-minor-mode org-table-highlight-mode
+  "Minor mode to enable or disable Org table highlighting.
+
+When enabled:
+- Highlights are automatically restored after table alignments or movements.
+- Metadata is maintained and saved on buffer close.
+
+When disabled:
+- All highlights (overlays) in the current buffer are removed.
+- All metadata for this buffer is cleared.
+- Advices and hooks are disabled."
+  :lighter " OrgTblHL"
+  :group 'org-table-highlight
+  (if org-table-highlight-mode
+      (progn
+        (advice-add 'org-table-align :after #'org-table-highlight-restore)
+        (advice-add 'org-table-next-field :after #'org-table-highlight-restore)
+
+        (advice-add 'org-table-insert-column :after
+                    (lambda () (org-table-highlight--fix-indice 'insert)))
+        (advice-add 'org-table-delete-column :after
+                    (lambda () (org-table-highlight--fix-indice 'delete-column)))
+        (advice-add 'org-table-move-column :after
+                    (lambda (&optional move)
+                      (org-table-highlight--fix-indice (or move 'right))))
+
+        (advice-add 'org-table-insert-row :after
+                    (lambda (&optional arg)
+                      (org-table-highlight--fix-indice (if arg 'below 'above))))
+        (advice-add 'org-table-kill-row :after
+                    (lambda () (org-table-highlight--fix-indice 'delete-row)))
+        (advice-add 'org-table-move-row :after
+                    (lambda (&optional move)
+                      (org-table-highlight--fix-indice (or move 'down))))
+
+        (add-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata nil t)
+
+        ;; Restore highlights if metadata exists
+        (org-table-highlight-apply-buffer-metadata)
+        (message "org-table-highlight-mode enabled."))
+
+    (progn
+      ;; Remove ALL highlights in the buffer (overlays and metadata)
+      (when (derived-mode-p 'org-mode)
+        (org-table-highlight-clear-buffer-overlays))
+
+      ;; Remove advices
+      (advice-remove 'org-table-align #'org-table-highlight-restore)
+      (advice-remove 'org-table-next-field #'org-table-highlight-restore)
+
+      (advice-remove 'org-table-insert-column
+                     (lambda () (org-table-highlight--fix-indice 'insert)))
+      (advice-remove 'org-table-delete-column
+                     (lambda () (org-table-highlight--fix-indice 'delete-column)))
+      (advice-remove 'org-table-move-column
+                     (lambda (&optional move)
+                       (org-table-highlight--fix-indice (or move 'right))))
+
+      (advice-remove 'org-table-insert-row
+                     (lambda (&optional arg)
+                       (org-table-highlight--fix-indice (if arg 'below 'above))))
+      (advice-remove 'org-table-kill-row
+                     (lambda () (org-table-highlight--fix-indice 'delete-row)))
+      (advice-remove 'org-table-move-row
+                     (lambda (&optional move)
+                       (org-table-highlight--fix-indice (or move 'down))))
+
+      (remove-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata t)
+
+      (message "org-table-highlight-mode disabled: all highlights and metadata cleared."))))
+
 (provide 'org-table-highlight)
 ;;; org-table-highlight.el ends here
