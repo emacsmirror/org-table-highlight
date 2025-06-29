@@ -97,7 +97,7 @@ by storing a short prefix and suffix string around the table position."
 This includes the table's name (if any), a short string before the table,
 and a short string after it, used to help identify the table if it has
 no `#+NAME:` property. The length of these strings is controlled by
-`org-table-highlight-table-context-length`."
+`org-table-highlight-table-context-length'."
   (when (org-at-table-p)
     (save-excursion
       (let* ((table-name (org-table-highlight--get-table-name))
@@ -289,7 +289,7 @@ highlight color."
 - If TYPE and INDEX are non-nil: remove the specific INDEX under TYPE.
 - If TYPE is non-nil and INDEX is nil: remove all entries under TYPE.
 - If both TYPE and INDEX are nil: remove the entire TABLE-NAME entry
-- from BUF-NAME.  If BUF-NAME has no tables left, remove BUF-NAME from
+  from BUF-NAME.  If BUF-NAME has no tables left, remove BUF-NAME from
   metadata."
   (let ((buf-entry (assoc buf-name org-table-highlight--metadata)))
     (when buf-entry
@@ -541,16 +541,17 @@ This function is intended to be called after structural edits (e.g., with
     (when-let* ((buf-name (buffer-name))
                 (table-context (org-table-highlight--table-context))
                 (table-list (cadr (assoc buf-name org-table-highlight--metadata))))
-      (unless (member handle '(up down below above))
-       (let* ((_column (org-table-current-column))
-              (col-alist (org-table-highlight--find-index-by-context
-                          table-list table-context))
-              (col-entries (plist-get col-alist :col)))
-         (dolist (col-entry col-entries)
-           (let ((col (car col-entry)))
-             (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries)))))
 
-      (unless (member handle '(left right))
+      (unless (member handle '(up down below above)) ;; ignore row editing operations
+        (let* ((_column (org-table-current-column))
+               (col-alist (org-table-highlight--find-index-by-context
+                           table-list table-context))
+               (col-entries (plist-get col-alist :col)))
+          (dolist (col-entry col-entries)
+            (let ((col (car col-entry)))
+              (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries)))))
+      
+      (unless (member handle '(left right)) ;; ignore column editing operations
         (let* ((_row (org-table-current-line))
                (row-alist (org-table-highlight--find-index-by-context table-list table-context))
                (row-entries (plist-get row-alist :row)))
