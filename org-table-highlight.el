@@ -175,9 +175,10 @@ With \\[universal-argument] prefix, prompt for color."
   (when (org-at-table-p)
     (when-let* ((buf-name (buffer-name))
                 (table-context (org-table-highlight--table-context))
-                (buf-entry (assoc buf-name org-table-highlight--metadata)))
-      (let* ((table-entry (org-table-highlight--find-index-by-context (cadr buf-entry) table-context)))
-
+                (buf-entry (assoc buf-name org-table-highlight--metadata))
+                (table-entry (org-table-highlight--find-index-by-context
+                              (cadr buf-entry) table-context)))
+      
         ;; Reapply column highlights
         (dolist (col-entry (plist-get table-entry :col))
           (let ((col (car col-entry))
@@ -193,7 +194,7 @@ With \\[universal-argument] prefix, prompt for color."
             (save-excursion
               (goto-char (org-table-begin))
               (org-table-goto-line row)
-              (org-table-highlight-row color))))))))
+              (org-table-highlight-row color)))))))
 
 (advice-add 'org-table-align :after #'org-table-highlight-restore)
 (advice-add 'org-table-next-field :after #'org-table-highlight-restore)
@@ -538,30 +539,34 @@ It does the following:
 This function is intended to be called after structural edits (e.g., with
 `org-table-insert-column`, `org-table-delete-row`, etc.)."
   (save-excursion
-    (when-let* ((buf-name (buffer-name))
-                (table-context (org-table-highlight--table-context))
-                (table-list (cadr (assoc buf-name org-table-highlight--metadata))))
+    (let (has-row-hightlights has-column-highlights)
+      (when-let* ((buf-name (buffer-name))
+                  (table-context (org-table-highlight--table-context))
+                  (table-list (cadr (assoc buf-name org-table-highlight--metadata))))
 
-      (unless (member handle '(up down below above)) ;; ignore row editing operations
-        (let* ((_column (org-table-current-column))
-               (col-alist (org-table-highlight--find-index-by-context
-                           table-list table-context))
-               (col-entries (plist-get col-alist :col)))
-          (dolist (col-entry col-entries)
-            (let ((col (car col-entry)))
-              (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries)))))
-      
-      (unless (member handle '(left right)) ;; ignore column editing operations
-        (let* ((_row (org-table-current-line))
-               (row-alist (org-table-highlight--find-index-by-context table-list table-context))
-               (row-entries (plist-get row-alist :row)))
-          (dolist (row-entry row-entries)
-            (let ((row (car row-entry)))
-              (org-table-highlight--fix-indice-1 row _row handle row-entry row-entries)))))
-      
-      (org-table-highlight-clear-all-highlights 'keep-metadata)
-      (org-table-highlight-restore)
-      (org-table-highlight--collect-buffer-metadata))))
+        (unless (member handle '(up down below above)) ;; ignore row editing operations
+          (when-let* ((_column (org-table-current-column))
+                      (col-alist (org-table-highlight--find-index-by-context
+                                  table-list table-context))
+                      (col-entries (plist-get col-alist :col)))
+            (setq has-column-highlights t)
+            (dolist (col-entry col-entries)
+              (let ((col (car col-entry)))
+                (org-table-highlight--fix-indice-1 col _column handle col-entry col-entries)))))
+       
+        (unless (member handle '(left right)) ;; ignore column editing operations
+          (when-let* ((_row (org-table-current-line))
+                      (row-alist (org-table-highlight--find-index-by-context table-list table-context))
+                      (row-entries (plist-get row-alist :row)))
+            (setq has-row-highlights t)
+            (dolist (row-entry row-entries)
+              (let ((row (car row-entry)))
+                (org-table-highlight--fix-indice-1 row _row handle row-entry row-entries)))))
+
+        (when (or has-column-highlights has-row-hightlights)
+          (org-table-highlight-clear-all-highlights 'keep-metadata)
+          (org-table-highlight-restore)
+          (org-table-highlight--collect-buffer-metadata))))))
 
 (advice-add 'org-table-insert-column
             :after #'(lambda () (org-table-highlight--fix-indice 'insert)))
