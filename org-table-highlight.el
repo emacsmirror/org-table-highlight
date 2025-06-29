@@ -659,8 +659,10 @@ This function is intended to be called after structural edits (e.g., with
 
 This includes both column and row highlights, regardless of table context."
   (interactive)
-  (remove-overlays (point-min) (point-max) 'org-table-highlight-column t)
-  (remove-overlays (point-min) (point-max) 'org-table-highlight-row t)
+  (org-table-highlight--remove-overlays
+   (point-min) (point-max) 'org-table-highlight-column)
+  (org-table-highlight--remove-overlays
+   (point-min) (point-max) 'org-table-highlight-row)
   (message "All Org table highlight overlays removed from buffer."))
 
 ;;;###autoload
