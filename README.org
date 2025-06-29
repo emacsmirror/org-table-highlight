@@ -9,7 +9,8 @@ Designed for enhanced readability and interactive table highlighting.
 * Features
 
 - Highlight the current column or row in an Org-mode table
-- Highlights persist across sessions using table name or structural context
+- Highlights persist across sessions using table name or structural editing
+- Minor mode to toggle highlight behavior per buffer
 - Cycle through a pastel color palette or custom color with ~C-u~ prefix
 - Highlights are automatically restored:
   + When visiting buffers
@@ -27,9 +28,9 @@ Via =use-package= for Emacs 30:
 #+begin_src emacs-lisp
 (use-package org-table-highlight
   :vc (:url "https://www.github.com/llcc/org-table-highlight" :rev :newest)
+  :hook (org-mode . org-table-highlight-mode)
   :config
-  (add-hook 'after-init-hook #'org-table-highlight-load-metadata)
-  (add-hook 'org-mode-hook #'org-table-highlight-apply-buffer-metadata))
+  (add-hook 'after-init-hook #'org-table-highlight-load-metadata))
 #+end_src
 
 Or manually:
