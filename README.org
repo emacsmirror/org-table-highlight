@@ -75,6 +75,6 @@ Feel free to change the path.
 
 * License
 
-License © Lei Zhe
+GPL-3.0
 
 Feel free to use, share, and improve!
