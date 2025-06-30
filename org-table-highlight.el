@@ -387,7 +387,7 @@ With \\[universal-argument] prefix, prompt for color."
            (start (line-beginning-position))
            (end (line-end-position)))
       (cl-incf org-table-highlight--highlighted-rows)
-      (org-table-highlight--update-metadata buf-name table-context 'row row nil chosen-color)
+      (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil)
       (unless (org-table-highlight--overlayp 'org-table-highlight-row)
         (org-table-highlight--make-overlay start end `(:background ,chosen-color)
                                            'org-table-highlight-row row)))))
@@ -404,8 +404,8 @@ With \\[universal-argument] prefix, prompt for color."
       ;; Reapply column highlights
       (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
         (let ((col (car col-entry))
-              (color (plist-get col-entry :color))
-              (predicate (plist-get col-entry :predicate)))
+              (color (plist-get (cdr col-entry) :color))
+              (predicate (plist-get (cdr col-entry) :predicate)))
           (save-excursion
             (org-table-goto-column col)
             (org-table-highlight-column color predicate))))
@@ -413,7 +413,7 @@ With \\[universal-argument] prefix, prompt for color."
       ;; Reapply row highlights
       (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
         (let ((row (car row-entry))
-              (color (cdr row-entry)))
+              (color (plist-get (cdr row-entry) :color)))
           (save-excursion
             (goto-char (org-table-begin))
             (org-table-goto-line row)
@@ -581,7 +581,7 @@ or nil if there are no highlight overlays."
                    (indice (list row :color color)))
           (when predicate
             (plist-put indice :predicate predicate))
-          (cl-pushnew (cons row color) row-entries :test #'equal))))
+          (cl-pushnew indice row-entries :test #'equal))))
     (when (or col-alist row-entries)
       (save-excursion
         (goto-char begin)
