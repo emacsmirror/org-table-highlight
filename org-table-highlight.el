@@ -113,7 +113,7 @@ Includes the table's context and lists of highlighted columns and rows."
   "Top-level structure storing all table highlight metadata for a buffer.
 Holds the buffer name and a list of`org-table-highlight--metadata-table'
 instances associated with it."
-  name                 ; Buffer name (string)
+  name            ; Buffer name (string)
   tables)         ; List of `org-table-highlight--metadata-table'
                   ; structs in the buffer
 
@@ -273,12 +273,61 @@ no #+NAME:.  The length of these strings is controlled by
          :before-string before-string
          :after-string after-string)))))
 
+(defun org-table-highlight--parse-comparator (expr)
+  "Convert a comparator string like \">100\" or \"=TODO\" to a comparison form.
+Supports numeric and string values."
+  (let* ((re "^\\(<=\\|>=\\|<\\|>\\|=\\|!=\\|/=\\)\\s-*\\(.+\\)$")
+         (match (string-match re expr)))
+    (if match
+        (let* ((op (match-string 1 expr))
+               (val-str (match-string 2 expr))
+               (op-symbol (if (string= op "!=") '/= (intern op)))
+               (is-num (string-match-p "\\`[0-9.]+\\'" val-str))
+               (val-expr (if is-num
+                             `(string-to-number val)
+                           `val))
+               (comp-val (if is-num
+                             (string-to-number val-str)
+                           val-str)))
+          (cond
+           ((member op-symbol '(= /=))
+            ;; String equality/inequality or numeric
+            (if is-num
+                ;; numeric comparison
+                `(,op-symbol ,val-expr ,comp-val)
+              ;; string equality/inequality
+              (if (eq op-symbol '=)
+                  `(string= val ,comp-val)
+                `(not (string= val ,comp-val)))))
+           (t
+            ;; For <, >, <=, >= only numeric supported
+            (if is-num
+                `(,op-symbol ,val-expr ,comp-val)
+              (error "Operator %s not supported for non-numeric value %s" op val-str)))))
+      (error "Invalid comparator expression: %s" expr))))
+
+(defun org-table-highlight--parse-and-expr (expr)
+  "Parse a subexpression with `and` logic."
+  (let* ((parts (split-string expr "\\s-+and\\s-+"))
+         (conditions (mapcar #'org-table-highlight--parse-comparator parts)))
+    `(and ,@conditions)))
+
+(defun org-table-highlight--parse-comparison (expr)
+  "Parse expressions with `and` and `or`, like \">10 and <100 or =TODO\".
+Returns a lambda that takes a string VAL."
+  (let* ((or-parts (split-string expr "\\s-+or\\s-+"))
+         (and-forms (mapcar #'org-table-highlight--parse-and-expr or-parts)))
+    `(lambda (val) (or ,@and-forms))))
+
 ;;;###autoload
-(defun org-table-highlight-column (&optional color)
+(defun org-table-highlight-column (&optional color predicate)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
 With \\[universal-argument] prefix, prompt for color."
   (interactive
-   (list (when current-prefix-arg (read-color "Column color: " t))))
+   (list
+    (when current-prefix-arg (read-color "Column color: " t))
+    (when (equal current-prefix-arg '(16)) ; C-u C-u
+      (org-table-highlight--parse-comparison (read-string "Predicate (val): ")))))
   (when (and (org-at-table-p)
              (not (org-table-highlight--overlayp 'org-table-highlight-column)))
     (let* ((buf-name (buffer-name))
@@ -302,9 +351,14 @@ With \\[universal-argument] prefix, prompt for color."
                 (setq pos (point))
                 (setq i (1+ i)))
               (when (re-search-forward "[|\\|+]" line-end t)
-                (org-table-highlight--make-overlay
-                 pos (1- (point)) `(:background ,chosen-color)
-                 'org-table-highlight-column col)))
+                (when (or (null predicate)
+                          (funcall predicate
+                                   (string-trim
+                                    (buffer-substring-no-properties
+                                     pos (1- (point))))))
+                  (org-table-highlight--make-overlay
+                   pos (1- (point)) `(:background ,chosen-color)
+                   'org-table-highlight-column col))))
             (forward-line 1)))))))
 
 ;;;###autoload
@@ -730,7 +784,7 @@ When disabled:
 
       (remove-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata t)
 
-      (message "org-table-highlight-mode disabled: all highlights and metadata cleared, while highlights metadata uncleared.."))))
+      (message "org-table-highlight-mode disabled: all highlights and metadata cleared, while metadata remains uncleared.."))))
 
 (provide 'org-table-highlight)
 ;;; org-table-highlight.el ends here
