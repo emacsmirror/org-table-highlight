@@ -143,10 +143,20 @@ Note: after-string is *not* used for matching."
 
 (defun org-table-highlight--update-metadata
     (buffer-name table-context type index color predicate extend &optional remove)
-  "Add or remove a column or row highlight in BUFFER-NAME's TABLE-CONTEXT.
-TYPE should be either \='col or \='row.
-INDEX is the column or row number.  COLOR is the highlight color.
-If REMOVE is non-nil, remove the entry instead of adding."
+  "Update highlight metadata for a specific Org table.
+
+This function updates the internal `org-table-highlight--metadata' structure
+by either adding or removing a highlight for a specific column or row in a
+specific table within a specific buffer.
+
+BUFFER-NAME is the name of the buffer.
+TABLE-CONTEXT uniquely identifies the Org table.
+TYPE is either \='col or \='row.
+INDEX is the column or row number to update.
+COLOR is the highlight color string (e.g. \"#FF0000\").
+PREDICATE is string used to store a test condition for conditional highlighting.
+EXTEND, if non-nil, extend the conditional highlight for whole row or column.
+If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
   (let* ((buf-meta
           (or (org-table-highlight--metadata--get-buffer buffer-name)
               (unless remove
@@ -219,7 +229,7 @@ If REMOVE is non-nil, remove the entry instead of adding."
 (defun org-table-highlight--make-overlay (start end face &rest properties)
   "Create an overlay from START to END with FACE and extra overlay PROPERTIES.
 
-FACE is applied to the 'face property.
+FACE is applied to the \='face property.
 PROPERTIES is a plist of additional overlay properties like :symbol value."
   (let ((ov (make-overlay start end)))
     (overlay-put ov 'face face)
@@ -286,7 +296,7 @@ no #+NAME:.  The length of these strings is controlled by
          :after-string after-string)))))
 
 (defun org-table-highlight--parse-comparator (expr)
-  "Convert a comparator string like \">100\" or \"=TODO\" to a comparison form.
+  "Convert a comparator EXPR like \">100\" or \"=TODO\" to a comparison form.
 Supports numeric and string values."
   (let* ((re "^\\(<=\\|>=\\|<\\|>\\|=\\|!=\\|/=\\)\\s-*\\(.+\\)$")
          (match (string-match re expr)))
@@ -319,13 +329,13 @@ Supports numeric and string values."
       (error "Invalid comparator expression: %s" expr))))
 
 (defun org-table-highlight--parse-and-expr (expr)
-  "Parse a subexpression with `and` logic."
+  "Parse a subexpression EXPR with and logic."
   (let* ((parts (split-string expr "\\s-+and\\s-+"))
          (conditions (mapcar #'org-table-highlight--parse-comparator parts)))
     `(and ,@conditions)))
 
 (defun org-table-highlight--parse-comparison (expr)
-  "Parse expressions with `and` and `or`, like \">10 and <100 or =TODO\".
+  "Parse expressions EXPR with `and` and `or`, like \">10 and <100 or =TODO\".
 Returns a lambda that takes a string VAL."
   (let* ((or-parts (split-string expr "\\s-+or\\s-+"))
          (and-forms (mapcar #'org-table-highlight--parse-and-expr or-parts)))
@@ -334,7 +344,10 @@ Returns a lambda that takes a string VAL."
 ;;;###autoload
 (defun org-table-highlight-column (&optional color predicate extend)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
-With \\[universal-argument] prefix, prompt for color."
+With \\[universal-argument] prefix, prompt for color.
+
+PREDICATE is string used to store a test condition for conditional highlighting.
+EXTEND, if non-nil, extend the conditional highlight for whole row or column."
   (interactive
    (list
     (when current-prefix-arg (read-color "Column color: " t))
