@@ -9,6 +9,7 @@ Designed for enhanced readability and interactive table highlighting.
 * Features
 
 - Highlight the current column or row in an Org-mode table
+- Highlight column only when a condition is met using a predicate function
 - Highlights persist across sessions using table name or structural editing
 - Minor mode to toggle highlight behavior per buffer
 - Cycle through a pastel color palette or custom color with ~C-u~ prefix
@@ -19,7 +20,7 @@ Designed for enhanced readability and interactive table highlighting.
 - All highlights are done using *non-intrusive overlays*
 - Clear row/column highlights individually or entirely
   
-[[file:demo.jpg]]
+[[file:assets/demo.jpg]]
 
 * Installation
 
@@ -52,6 +53,14 @@ Open an Org table and run the interactive commands:
 | ~org-table-highlight-clear-column-highlights~ | Clear current/all column highlights       |
 | ~org-table-highlight-clear-row-highlights~    | Clear current/all row highlights          |
 | ~org-table-highlight-clear-all-highlights~    | Clear all highlights in the current table |
+
+The =org-table-highlight-column= command supports prefix arguments to modify its behavior:
+- None prefix: highlight the current column using a pre-defined default color.
+- C-u: Prompt for a custom color, then apply it to the current column.
+- C-u C-u: Prompt for a predicate string, then only highlight fields that match the condition.
+  Predicate string accept numeric comparisons such as >10, <10, =10, and !=10, and can be combined using logical operators and and or for more complex conditions. For example, in the image below, only the rows where the years exceed 10 are highlighted.
+  [[file:assets/conditional highlight.png]]
+- C-u C-u C-u: In addition to the above, extend the highlight across the entire row where the condition matches.
 
 * Customization
 
