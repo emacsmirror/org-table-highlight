@@ -708,31 +708,27 @@ It does the following:
 This function is intended to be called after structural edits (e.g., with
 `org-table-insert-column', `org-table-delete-row', etc.)."
   (save-excursion
-    (let (has-row-highlights has-column-highlights)
-      (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name)))
-                  (table-context (org-table-highlight--table-context))
-                  (table-meta (org-table-highlight--metadata--get-table buf-meta table-context)))
+    (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name)))
+                (table-context (org-table-highlight--table-context))
+                (table-meta (org-table-highlight--metadata--get-table buf-meta table-context)))
 
-        (unless (member handle '(up down below above delete-row)) ;; ignore row editing operations
-          (when-let* ((ref-column (org-table-current-column))
-                      (col-highlights (org-table-highlight--metadata-table-col-highlights table-meta)))
-            (setq has-column-highlights t)
-            (dolist (col-highlight col-highlights)
-              (let ((col (car col-highlight)))
-                (org-table-highlight--fix-indice-1 col ref-column handle col-highlight table-meta)))))
+      (unless (member handle '(up down below above delete-row)) ;; ignore row editing operations
+        (when-let* ((ref-column (org-table-current-column))
+                    (col-highlights (org-table-highlight--metadata-table-col-highlights table-meta)))
+          (dolist (col-highlight col-highlights)
+            (let ((col (car col-highlight)))
+              (org-table-highlight--fix-indice-1 col ref-column handle col-highlight table-meta)))))
 
-        (unless (member handle '(left right delete-column)) ;; ignore column editing operations
-          (when-let* ((ref-row (org-table-current-line))
-                      (row-highlights (org-table-highlight--metadata-table-row-highlights table-meta)))
-            (setq has-row-highlights t)
-            (dolist (row-highlight row-highlights)
-              (let ((row (car row-highlight)))
-                (org-table-highlight--fix-indice-1 row ref-row handle row-highlight table-meta)))))
+      (unless (member handle '(left right delete-column)) ;; ignore column editing operations
+        (when-let* ((ref-row (org-table-current-line))
+                    (row-highlights (org-table-highlight--metadata-table-row-highlights table-meta)))
+          (dolist (row-highlight row-highlights)
+            (let ((row (car row-highlight)))
+              (org-table-highlight--fix-indice-1 row ref-row handle row-highlight table-meta)))))
 
-        (when (or has-column-highlights has-row-highlights)
-          (org-table-highlight-clear-all-highlights 'keep-metadata)
-          (org-table-highlight-restore)
-          (org-table-highlight--collect-buffer-metadata))))))
+      (org-table-highlight-clear-all-highlights 'keep-metadata)
+      (org-table-highlight-restore)
+      (org-table-highlight--collect-buffer-metadata))))
 
 (defun org-table-highlight-clear-buffer-overlays ()
   "Remove all Org table highlight overlays in the current buffer.
