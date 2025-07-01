@@ -2,7 +2,7 @@
 
 ;; Author: Lei Zhe
 ;; URL: https://github.com/llcc/org-table-highlight
-;; Version: 0.3
+;; Version: 0.4
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: org-table, convenience
 
@@ -370,7 +370,7 @@ EXTEND, if non-nil, extend the conditional highlight for whole row or column."
           (goto-char (point-min))
           (while (not (eobp))
             (let ((line-end (line-end-position))
-                  (pos (line-beginning-position))
+                  (pos (line-beginning-position))
                   (i 0))
               (while (and (< i col)
                           (re-search-forward "[|\\|+]" line-end t))
