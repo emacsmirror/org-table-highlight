@@ -32,7 +32,9 @@
     (org-table-goto-column 1)
     (org-table-highlight-column "#ABCDEF" ">1")
     (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
-
+    (org-table-goto-line 3)
+    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    
     ;; 2. Test normal highlighting
     (org-table-goto-column 2)
     (org-table-highlight-column "#AB11EF")
