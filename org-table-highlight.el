@@ -554,15 +554,15 @@ Keep metadata if KEEP-METADATA non-nils."
             ;; Apply columns
             (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
               (let ((col (car col-entry))
-                    (color (plist-get entry :color))
-                    (predicate (plist-get entry :predicate)))
+                    (color (plist-get (cdr col-entry) :color))
+                    (predicate (plist-get (cdr col-entry) :predicate)))
                 (org-table-goto-column col predicate)
                 (org-table-highlight-column color)))
 
             ;; Apply rows
             (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
               (let ((row (car row-entry))
-                    (color (plist-get row-entry :color)))
+                    (color (plist-get (cdr row-entry) :color)))
                 (goto-char (org-table-begin))
                 (forward-line (1- row))
                 (org-table-highlight-row color)))))))))
