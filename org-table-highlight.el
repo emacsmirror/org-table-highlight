@@ -632,13 +632,14 @@ Returns a list of entries of the form:
             (cl-remove-if-not #'identity
                               (org-element-map (org-element-parse-buffer) 'table
                                 #'org-table-highlight--collect-table-metadata))))
-      (setf (org-table-highlight--metadata-buffer-tables buf-meta) table-meta)
+      (when buf-meta
+        (setf (org-table-highlight--metadata-buffer-tables buf-meta) table-meta)
 
-      (when (and buf-meta
-                 (null (org-table-highlight--metadata-buffer-tables buf-meta)))
-        (setq org-table-highlight--metadata
-              (delete buf-meta org-table-highlight--metadata))))
-    (org-table-highlight-save-metadata)))
+        (when (null (org-table-highlight--metadata-buffer-tables buf-meta))
+          (setq org-table-highlight--metadata
+                (delete buf-meta org-table-highlight--metadata)))
+
+        (org-table-highlight-save-metadata)))))
 
 (defun org-table-highlight--fix-indice-1 (index ref-index handle entry table-meta)
   "Adjust a highlight ENTRY in TABLE-META depending on HANDLE and position.
