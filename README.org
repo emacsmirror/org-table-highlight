@@ -58,10 +58,12 @@ The =org-table-highlight-column= command supports prefix arguments to modify its
 - None prefix: highlight the current column using a pre-defined default color.
 - C-u: Prompt for a custom color, then apply it to the current column.
 - C-u C-u: Prompt for a predicate string, then only highlight fields that match the condition.
-  Predicate string accept numeric comparisons such as >10, <10, =10, and !=10, and can be combined using logical operators and and or for more complex conditions. For example, in the image below, only the rows where the years exceed 10 are highlighted.
-  
-  [[file:assets/conditional highlight.png]]
+  Predicate string accept numeric comparisons such as >10, <10, =10, and !=10, and can be combined using logical operators and and or for more complex conditions. 
 - C-u C-u C-u: In addition to the above, extend the highlight across the entire row where the condition matches.
+
+For example, in the image below, only the rows where the years exceed 10 are highlighted.
+  
+[[file:assets/conditional-highlight.png]]
 
 * Customization
 
