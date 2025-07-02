@@ -222,10 +222,13 @@ The highlight should move to the right to stay on the same logical column."
   "Test `org-table-highlight--collect-buffer-metadata` returns correct table metadata."
   (org-table-highlight--with-test-env
    (org-table-highlight--with-temp-buffer
+    (org-table-highlight--collect-buffer-metadata)
+    (should-not org-table-highlight--metadata)
+    
     ;; Highlight a column and a row
     (org-table-goto-column 2)
     (org-table-highlight-column "#123456")
-    (forward-line 2)
+    (org-table-goto-line 2)
     (org-table-highlight-row "#654321")
 
     (org-table-highlight--collect-buffer-metadata)

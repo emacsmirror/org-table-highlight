@@ -63,12 +63,12 @@ Each `org-table-highlight--metadata-table' contains:
       - :after-string: string content after the table end.
 
   - :col-highlights — a list of highlighted columns:
-      ((COLUMN-INDEX . COLOR) ...), where:
+      ((COLUMN-INDEX :color COLOR) ...), where:
         - COLUMN-INDEX is an integer (1-based)
         - COLOR is a color string like \"#FFB6C1\"
 
   - `:row-highlights` — a list of highlighted rows:
-      ((ROW-INDEX . COLOR) ...), where:
+      ((ROW-INDEX :color COLOR) ...), where:
         - ROW-INDEX is an integer (1-based)
         - COLOR is a string like \"#ADD8E6\"
 
@@ -80,8 +80,8 @@ Example:
                     :name \"my-table\"
                     :before-string \"Text before the table\"
                     :after-string \"Text after the table\")
-         :col-highlights ((2 . \"#FFB6C1\") (3 . \"#D8BFD8\"))
-         :row-highlights ((1 . \"#ADD8E6\") (4 . \"#FFE4B5\")))))
+         :col-highlights ((2 :color \"#FFB6C1\") (3 :color \"#D8BFD8\"))
+         :row-highlights ((1 :color \"#ADD8E6\") (4 :color \"#FFE4B5\")))))
    (\"tasks.org\" ...)
    ...)
 
@@ -106,8 +106,8 @@ before or after the table to help locate it uniquely."
 Includes the table's context and lists of highlighted columns and rows."
   context         ; An `org-table-highlight--metadata-context'
                   ; instance identifying the table
-  col-highlights  ; Alist of (col-index . color) for highlighted columns
-  row-highlights) ; Alist of (row-index . color) for highlighted rows
+  col-highlights  ; Alist of (col-index :color COLOR) for highlighted columns
+  row-highlights) ; Alist of (row-index :color COLOR) for highlighted rows
 
 (cl-defstruct org-table-highlight--metadata-buffer
   "Top-level structure storing all table highlight metadata for a buffer.
@@ -585,7 +585,8 @@ Keep metadata if KEEP-METADATA non-nils."
 
 Returns a metadata entry of the form:
   ((:name NAME :before-string STR :after-string STR)
-   :col ((N . COLOR)) :row ((N . COLOR)))
+   :col ((N :color COLOR :predicate PREDICATE :extend t))
+   :row ((N :color COLOR :predicate PREDICATE)))
 or nil if there are no highlight overlays."
   (let* ((begin (org-element-property :contents-begin tbl))
          (end (org-element-property :contents-end tbl))
