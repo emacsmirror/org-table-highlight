@@ -222,6 +222,7 @@ The highlight should move to the right to stay on the same logical column."
   "Test `org-table-highlight--collect-buffer-metadata` returns correct table metadata."
   (org-table-highlight--with-test-env
    (org-table-highlight--with-temp-buffer
+    ;; https://github.com/llcc/org-table-highlight/issues/4
     (org-table-highlight--collect-buffer-metadata)
     (should-not org-table-highlight--metadata)
     

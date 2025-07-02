@@ -369,26 +369,26 @@ EXTEND, if non-nil, extend the conditional highlight for whole row or column."
         (save-excursion
           (goto-char (point-min))
           (while (not (eobp))
-            (let ((line-end (line-end-position))
-                  (pos (line-beginning-position))
-                  (i 0))
+            (let ((beg (point)) (end (line-end-position)) (i 0))
               (while (and (< i col)
-                          (re-search-forward "[|\\|+]" line-end t))
-                (setq pos (point))
+                          (re-search-forward
+                           (if (org-at-table-hline-p) "[|\\+]" "|")
+                           (line-end-position) t))
+                (setq beg (point))
                 (setq i (1+ i)))
-              (when (re-search-forward "[|\\|+]" line-end t)
-                (when (or (null predicate)
-                          (funcall (org-table-highlight--parse-comparison predicate)
-                                   (string-trim (buffer-substring-no-properties
-                                                 pos (1- (point))))))
-                  (if extend
-                      (org-table-highlight--make-overlay
-                       (line-beginning-position) (line-end-position)
-                       `(:background ,chosen-color)
-                       'org-table-highlight-column col :predicate predicate :extend t)
+              (setq end (progn (skip-chars-forward (if (org-at-table-hline-p) "-" "^|"))
+                          (point)))
+              (when (or (null predicate)
+                        (funcall (org-table-highlight--parse-comparison predicate)
+                                 (string-trim (buffer-substring-no-properties beg end))))
+                (if extend
                     (org-table-highlight--make-overlay
-                     pos (1- (point)) `(:background ,chosen-color)
-                     'org-table-highlight-column col :predicate predicate)))))
+                     (line-beginning-position) (line-end-position)
+                     `(:background ,chosen-color)
+                     'org-table-highlight-column col :predicate predicate :extend t)
+                  (org-table-highlight--make-overlay
+                   beg end `(:background ,chosen-color)
+                   'org-table-highlight-column col :predicate predicate))))
             (forward-line 1)))))))
 
 ;;;###autoload
