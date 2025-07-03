@@ -338,10 +338,10 @@ Returns a lambda that takes a string VAL."
 ;;;###autoload
 (defun org-table-highlight-column (&optional color predicate extend)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
-With \\[universal-argument] prefix, prompt for color.
 
-PREDICATE is string used to store a test condition for conditional highlighting.
-EXTEND, if non-nil, extend the conditional highlight for whole row or column."
+With a prefix argument (\\[universal-argument]), prompt for a color.
+With a double prefix argument, prompt for a conditional PREDICATE.
+With a triple prefix argument, also EXTEND the highlight to the whole row."
   (interactive
    (list
     (when current-prefix-arg (read-color "Column color: " t))
@@ -402,7 +402,7 @@ EXTEND, if non-nil, extend the conditional highlight for whole row or column."
 ;;;###autoload
 (defun org-table-highlight-row (&optional color)
   "Highlight the current Org table row with a cycling or user-supplied COLOR.
-With \\[universal-argument] prefix, prompt for color."
+With a prefix argument (\\[universal-argument]), prompt for a color."
   (interactive
    (list (when current-prefix-arg (read-color "Row color: " t))))
   (when (and (org-at-table-p)
@@ -783,10 +783,11 @@ buffer, regardless of table context."
 (defun org-table-highlight-list-all (&optional buffers-to-process)
   "List highlighted Org tables.
 
-- With no prefix argument, lists tables in the current buffer.
-- With C-u, prompts for a buffer to list.
-- With C-u C-u, lists tables from all buffers with known
-  highlight metadata."
+BUFFERS-TO-PROCESS is the list of buffer to display the highlight.
+Behavior depends on the prefix argument (\\[universal-argument]):
+- No prefix: List tables in the current buffer.
+- One prefix: Prompt for a buffer to list.
+- Two prefixes: List tables from all buffers with known highlight metadata."
   (interactive
    (let ((all-buffers-with-meta
           (cl-loop for b-meta in org-table-highlight--metadata
@@ -798,11 +799,11 @@ buffer, regardless of table context."
 
         ;; C-u: Prompt for one buffer
         ('(4) (if all-buffers-with-meta
-                 (list (get-buffer
-                        (completing-read "List highlights for buffer: "
-                                         (mapcar #'buffer-name all-buffers-with-meta)
-                                         nil t)))
-               (progn (message "No highlight metadata found.") nil)))
+                  (list (get-buffer
+                         (completing-read "List highlights for buffer: "
+                                          (mapcar #'buffer-name all-buffers-with-meta)
+                                          nil t)))
+                (progn (message "No highlight metadata found.") nil)))
 
         ;; No prefix: Use current buffer
         (_ (list (current-buffer)))))))
