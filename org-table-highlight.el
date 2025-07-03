@@ -362,7 +362,6 @@ With a triple prefix argument, also EXTEND the highlight to the whole row."
            (chosen-color (or color (org-table-highlight--next-color
                                     highlighted-columns-count)))
            (bounds (org-table-highlight--table-bounds)))
-      (cl-incf org-table-highlight--highlighted-columns)
       (org-table-highlight--update-metadata
        buf-name table-context 'col col chosen-color predicate extend)
       (save-restriction
@@ -426,7 +425,6 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
                   (goto-char (line-end-position))
                   (skip-chars-backward "^|")
                   (point))))
-      (cl-incf org-table-highlight--highlighted-rows)
       (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil nil)
       (unless (org-table-highlight--overlayp 'org-table-highlight-row)
         (org-table-highlight--make-overlay start end `(:background ,chosen-color)
@@ -587,12 +585,12 @@ Keep metadata if KEEP-METADATA non-nils."
           (when (and pos (goto-char pos))
             ;; Apply columns
             (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
-              (let ((col (car col-entry))
-                    (color (plist-get (cdr col-entry) :color))
-                    (predicate (plist-get (cdr col-entry) :predicate)))
-                (org-table-goto-column col predicate)
-                (org-table-highlight-column color)))
-
+              (cl-destructuring-bind (col . props) col-entry
+                (let ((color (plist-get col-entry :color))
+                      (predicate (plist-get col-entry :predicate))
+                      (extend (plist-get col-entry :extend)))
+                  (org-table-goto-column col)
+                  (org-table-highlight-column color predicate extend))))
             ;; Apply rows
             (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
               (let ((row (car row-entry))
