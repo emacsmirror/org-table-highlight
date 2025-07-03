@@ -762,9 +762,10 @@ This function is intended to be called after structural edits (e.g., with
       (org-table-highlight--collect-buffer-metadata))))
 
 (defun org-table-highlight-clear-buffer-overlays ()
-  "Remove all Org table highlight overlays in the current buffer.
+  "Clear all Org table highlight overlays in the current buffer.
 
-This includes both column and row highlights, regardless of table context."
+This removes both column and row highlights overlays across the entire
+buffer, regardless of table context."
   (interactive)
   (org-table-highlight--remove-overlays
    (point-min) (point-max) 'org-table-highlight-column)
