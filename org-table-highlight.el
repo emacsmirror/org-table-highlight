@@ -27,12 +27,6 @@
   :type '(repeat color)
   :group 'org-table-highlight)
 
-(defvar-local org-table-highlight--highlighted-columns 0
-  "Number of Org table columns currently highlighted.")
-
-(defvar-local org-table-highlight--highlighted-rows 0
-  "Number of Org table rows currently highlighted.")
-
 (defvar org-table-highlight--metadata nil
   "Global metadata for Org table highlights across buffers.
 
@@ -357,9 +351,16 @@ EXTEND, if non-nil, extend the conditional highlight for whole row or column."
              (not (org-table-highlight--overlayp 'org-table-highlight-column)))
     (let* ((buf-name (buffer-name))
            (table-context (org-table-highlight--table-context))
+           (table-meta
+            (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
+              (org-table-highlight--metadata--get-table buf-meta table-context)))
+           (highlighted-columns-count
+            (if table-meta
+                (length (org-table-highlight--metadata-table-col-highlights table-meta))
+              0))
            (col (org-table-current-column))
            (chosen-color (or color (org-table-highlight--next-color
-                                    org-table-highlight--highlighted-columns)))
+                                    highlighted-columns-count)))
            (bounds (org-table-highlight--table-bounds)))
       (cl-incf org-table-highlight--highlighted-columns)
       (org-table-highlight--update-metadata
@@ -408,9 +409,15 @@ With \\[universal-argument] prefix, prompt for color."
              (not (org-table-highlight--overlayp 'org-table-highlight-row)))
     (let* ((buf-name (buffer-name))
            (table-context (org-table-highlight--table-context))
+           (table-meta
+            (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
+              (org-table-highlight--metadata--get-table buf-meta table-context)))
+           (highlighted-rows-count
+            (if table-meta
+                (length (org-table-highlight--metadata-table-row-highlights table-meta))
+              0))
            (row (org-table-current-line))
-           (chosen-color (or color (org-table-highlight--next-color
-                                    org-table-highlight--highlighted-rows)))
+           (chosen-color (or color (org-table-highlight--next-color highlighted-rows-count)))
            (start (save-excursion
                     (goto-char (line-beginning-position))
                     (back-to-indentation)
