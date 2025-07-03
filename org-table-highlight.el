@@ -773,6 +773,66 @@ buffer, regardless of table context."
   (message "All Org table highlight overlays removed from buffer."))
 
 ;;;###autoload
+(defun org-table-highlight-list-all (&optional buffers-to-process)
+  "List highlighted Org tables.
+
+- With no prefix argument, lists tables in the current buffer.
+- With C-u, prompts for a buffer to list.
+- With C-u C-u, lists tables from all buffers with known
+  highlight metadata."
+  (interactive
+   (let ((all-buffers-with-meta
+          (cl-loop for b-meta in org-table-highlight--metadata
+                   collect (get-buffer (org-table-highlight--metadata-buffer-name b-meta)))))
+     (list
+      (pcase current-prefix-arg
+        ;; C-u C-u: Use all buffers
+        ('(16) all-buffers-with-meta)
+
+        ;; C-u: Prompt for one buffer
+        ('(4) (if all-buffers-with-meta
+                 (list (get-buffer
+                        (completing-read "List highlights for buffer: "
+                                         (mapcar #'buffer-name all-buffers-with-meta)
+                                         nil t)))
+               (progn (message "No highlight metadata found.") nil)))
+
+        ;; No prefix: Use current buffer
+        (_ (list (current-buffer)))))))
+
+  (when buffers-to-process
+    (with-help-window (get-buffer-create "*Org Table Highlights*")
+      (let ((first-buffer t))
+        (dolist (buffer buffers-to-process)
+          ;; Print a header if processing multiple buffers
+          (if first-buffer
+              (setq first-buffer nil)
+            (princ "\n\n"))
+          (princ (format "--- Highlights in %s --\n\n" (buffer-name buffer)))
+          (if-let* ((buffer-name (buffer-name buffer))
+                    (buf-meta (org-table-highlight--metadata--get-buffer buffer-name))
+                    (tables (org-table-highlight--metadata-buffer-tables buf-meta)))
+              (dolist (table-meta tables)
+                (let* ((context (org-table-highlight--metadata-table-context table-meta))
+                       (name (org-table-highlight--metadata-context-name context))
+                       (pos (with-current-buffer buffer
+                              (org-table-highlight--get-table-position context)))
+                       (num-cols (length (org-table-highlight--metadata-table-col-highlights table-meta)))
+                       (num-rows (length (org-table-highlight--metadata-table-row-highlights table-meta))))
+                  (princ (format "- Table %s" (or name "(unnamed)")))
+                  (when pos
+                    (insert-button
+                     " [jump]"
+                     'action `(lambda (_)
+                                (pop-to-buffer ',buffer)
+                                (goto-char ,pos))
+                     'follow-link t))
+                  (princ (format " (%d columns, %d rows highlighted)\n" num-cols num-rows))))
+            ;; Message if a specific buffer in the list had no highlights
+            (unless (org-table-highlight--metadata--get-buffer (buffer-name buffer))
+              (princ (format "(No highlights found in %s)\n" (buffer-name buffer))))))))))
+
+;;;###autoload
 (define-minor-mode org-table-highlight-mode
   "Minor mode to enable or disable Org table highlighting.
 
