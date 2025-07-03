@@ -383,7 +383,14 @@ EXTEND, if non-nil, extend the conditional highlight for whole row or column."
                                  (string-trim (buffer-substring-no-properties beg end))))
                 (if extend
                     (org-table-highlight--make-overlay
-                     (line-beginning-position) (line-end-position)
+                     (save-excursion
+                       (goto-char (line-beginning-position))
+                       (back-to-indentation)
+                       (point))
+                     (save-excursion
+                       (goto-char (line-end-position))
+                       (skip-chars-backward "^|")
+                       (point))
                      `(:background ,chosen-color)
                      'org-table-highlight-column col :predicate predicate :extend t)
                   (org-table-highlight--make-overlay
@@ -404,8 +411,14 @@ With \\[universal-argument] prefix, prompt for color."
            (row (org-table-current-line))
            (chosen-color (or color (org-table-highlight--next-color
                                     org-table-highlight--highlighted-rows)))
-           (start (line-beginning-position))
-           (end (line-end-position)))
+           (start (save-excursion
+                    (goto-char (line-beginning-position))
+                    (back-to-indentation)
+                    (point)))
+           (end (save-excursion
+                  (goto-char (line-end-position))
+                  (skip-chars-backward "^|")
+                  (point))))
       (cl-incf org-table-highlight--highlighted-rows)
       (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil nil)
       (unless (org-table-highlight--overlayp 'org-table-highlight-row)
