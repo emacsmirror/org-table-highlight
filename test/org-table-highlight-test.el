@@ -30,12 +30,15 @@
     ;; 1. Test highlighting conditionally. The first row should not
     ;; contain any overlay.
     (org-table-goto-column 1)
-    (org-table-highlight-column "#ABCDEF" ">1")
+    (org-table-highlight-column "#ABCDEF" ">1" 'extend)
     (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
     (org-table-goto-line 3)
     (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (org-table-goto-column 2)
+    (should (org-table-highlight--overlayp 'org-table-highlight-column))
     
     ;; 2. Test normal highlighting
+    (org-table-goto-line 2)
     (org-table-goto-column 2)
     (org-table-highlight-column "#AB11EF")
     (should (org-table-highlight--overlayp 'org-table-highlight-column))
@@ -48,7 +51,7 @@
                        (org-table-highlight--metadata--get-buffer buffer-name)
                        table-context))
                      '((2 :color "#AB11EF")
-                       (1 :color "#ABCDEF" :predicate ">1"))))))))
+                       (1 :color "#ABCDEF" :predicate ">1" :extend t))))))))
 
 (ert-deftest org-table-highlight--test-highlight-row ()
   "Test column highlighting and overlay detection."
