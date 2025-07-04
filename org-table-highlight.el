@@ -339,64 +339,77 @@ Returns a lambda that takes a string VAL."
 (defun org-table-highlight-column (&optional color predicate extend)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
 
-With a prefix argument (\\[universal-argument]), prompt for a color.
-With a double prefix argument, prompt for a conditional PREDICATE.
-With a triple prefix argument, also EXTEND the highlight to the whole row."
+- With a prefix argument (\\[universal-argument]), prompt for a color.
+- With a double prefix argument, prompt for a conditional PREDICATE.
+  PREDICATE is a string expression like '>10', '=TODO', or '>=50 and <=100'.
+  Only cells that satisfy this will be highlighted.
+- With a triple prefix argument, also EXTEND the highlight to the whole row."
   (interactive
    (list
     (when current-prefix-arg (read-color "Column color: " t))
     (when (member current-prefix-arg '((16) (64))) (read-string "Predicate expr (val): "))
     (when (equal current-prefix-arg '(64)) t)))
-  (when (and (org-at-table-p)
-             (not (org-table-highlight--overlayp 'org-table-highlight-column)))
-    (let* ((buf-name (buffer-name))
-           (table-context (org-table-highlight--table-context))
-           (table-meta
-            (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
-              (org-table-highlight--metadata--get-table buf-meta table-context)))
-           (highlighted-columns-count
-            (if table-meta
-                (length (org-table-highlight--metadata-table-col-highlights table-meta))
-              0))
-           (col (org-table-current-column))
-           (chosen-color (or color (org-table-highlight--next-color
-                                    highlighted-columns-count)))
-           (bounds (org-table-highlight--table-bounds)))
-      (org-table-highlight--update-metadata
-       buf-name table-context 'col col chosen-color predicate extend)
-      (save-restriction
-        (narrow-to-region (car bounds) (cdr bounds))
-        (save-excursion
-          (goto-char (point-min))
-          (while (not (eobp))
-            (let ((beg (point)) (end (line-end-position)) (i 0))
-              (while (and (< i col)
-                          (re-search-forward
-                           (if (org-at-table-hline-p) "[|\\+]" "|")
-                           end t))
-                (setq beg (point))
-                (setq i (1+ i)))
-              (setq end (progn (skip-chars-forward (if (org-at-table-hline-p) "-" "^|"))
-                               (point)))
-              (when (or (null predicate)
-                        (funcall (org-table-highlight--parse-comparison predicate)
-                                 (string-trim (buffer-substring-no-properties beg end))))
-                (if extend
-                    (org-table-highlight--make-overlay
-                     (save-excursion
-                       (goto-char (line-beginning-position))
-                       (back-to-indentation)
-                       (point))
-                     (save-excursion
-                       (goto-char (line-end-position))
-                       (skip-chars-backward "^|")
-                       (point))
-                     `(:background ,chosen-color)
-                     'org-table-highlight-column col :predicate predicate :extend t)
-                  (org-table-highlight--make-overlay
-                   beg end `(:background ,chosen-color)
-                   'org-table-highlight-column col :predicate predicate))))
-            (forward-line 1)))))))
+
+  ;; Ensure we're inside a table
+  (unless (org-at-table-p)
+    (user-error "Not in an Org table"))
+
+  ;; Prevent duplicate highlight
+  (unless (org-table-highlight--overlayp 'org-table-highlight-column)
+   (let* ((buf-name (buffer-name))
+          (table-context (org-table-highlight--table-context))
+          (table-meta
+           (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
+             (org-table-highlight--metadata--get-table buf-meta table-context)))
+          (highlighted-columns-count
+           (if table-meta
+               (length (org-table-highlight--metadata-table-col-highlights table-meta))
+             0))
+          (col (org-table-current-column))
+          (chosen-color (or color (org-table-highlight--next-color
+                                   highlighted-columns-count)))
+          (bounds (org-table-highlight--table-bounds))
+          (predicate-fn (when predicate
+                          (org-table-highlight--parse-comparison predicate))))
+
+     ;; Save metadata
+     (org-table-highlight--update-metadata
+      buf-name table-context 'col col chosen-color predicate extend)
+
+     ;; Apply overlays inside narrowed region
+     (save-restriction
+       (narrow-to-region (car bounds) (cdr bounds))
+       (save-excursion
+         (goto-char (point-min))
+         (while (not (eobp))
+           (let ((beg (point)) (end (line-end-position)) (i 0))
+             (while (and (< i col)
+                         (re-search-forward
+                          (if (org-at-table-hline-p) "[|\\+]" "|")
+                          end t))
+               (setq beg (point))
+               (setq i (1+ i)))
+             (setq end (progn (skip-chars-forward (if (org-at-table-hline-p) "-" "^|"))
+                              (point)))
+             (when (or (null predicate-fn)
+                       (funcall predicate-fn
+                                (string-trim (buffer-substring-no-properties beg end))))
+               (if extend
+                   (org-table-highlight--make-overlay
+                    (save-excursion
+                      (goto-char (line-beginning-position))
+                      (back-to-indentation)
+                      (point))
+                    (save-excursion
+                      (goto-char (line-end-position))
+                      (skip-chars-backward "^|")
+                      (point))
+                    `(:background ,chosen-color)
+                    'org-table-highlight-column col :predicate predicate :extend t)
+                 (org-table-highlight--make-overlay
+                  beg end `(:background ,chosen-color)
+                  'org-table-highlight-column col :predicate predicate))))
+           (forward-line 1)))))))
 
 ;;;###autoload
 (defun org-table-highlight-row (&optional color)
