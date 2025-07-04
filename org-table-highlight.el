@@ -135,6 +135,24 @@ Note: after-string is *not* used for matching."
                    (org-table-highlight--metadata-context-before-string table-context)))))
    (org-table-highlight--metadata-buffer-tables buf-meta)))
 
+(defun org-table-highlight--cleanup-metadata (buf-meta table-meta)
+  "Clean up TABLE-META and BUF-META from metadata if they are empty.
+
+- If TABLE-META has no column or row highlights, it is removed from BUF-META.
+- If BUF-META has no tables remaining, it is removed from the global
+  `org-table-highlight--metadata' list."
+  ;; Remove TABLE-META from BUF-META if both highlights are empty
+  (when (and (null (org-table-highlight--metadata-table-col-highlights table-meta))
+             (null (org-table-highlight--metadata-table-row-highlights table-meta)))
+    (setf (org-table-highlight--metadata-buffer-tables buf-meta)
+          (delete table-meta (org-table-highlight--metadata-buffer-tables buf-meta))))
+
+  ;; Remove BUF-META from global metadata if it has no tables left
+  (when (and buf-meta
+             (null (org-table-highlight--metadata-buffer-tables buf-meta)))
+    (setq org-table-highlight--metadata
+          (delete buf-meta org-table-highlight--metadata))))
+
 (defun org-table-highlight--update-metadata
     (buffer-name table-context type index color predicate extend &optional remove)
   "Update highlight metadata for a specific Org table.
@@ -151,62 +169,64 @@ COLOR is the highlight color string (e.g. \"#FF0000\").
 PREDICATE is string used to store a test condition for conditional highlighting.
 EXTEND, if non-nil, extend the conditional highlight for whole row or column.
 If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
+  
   (let* ((buf-meta
+          ;; Find buffer metadata, creating it if it nils when adding a highlight..
           (or (org-table-highlight--metadata--get-buffer buffer-name)
               (unless remove
                 (let ((new (make-org-table-highlight--metadata-buffer
-                            :name buffer-name
-                            :tables nil)))
+                            :name buffer-name :tables nil)))
                   (push new org-table-highlight--metadata)
                   new))))
          (table-meta
-          (or (and buf-meta
-                   (org-table-highlight--metadata--get-table buf-meta table-context))
-              (unless remove
-                (let ((new-entry (make-org-table-highlight--metadata-table
-                                  :context table-context
-                                  :col-highlights nil
-                                  :row-highlights nil)))
-                  (push new-entry (org-table-highlight--metadata-buffer-tables buf-meta))
-                  new-entry)))))
+          ;; Find table metadata, creating it only if adding a highlight.
+          (and buf-meta
+               (or (org-table-highlight--metadata--get-table buf-meta table-context)
+                   (unless remove
+                     (let ((new (make-org-table-highlight--metadata-table
+                                 :context table-context
+                                 :col-highlights nil
+                                 :row-highlights nil)))
+                       (push new (org-table-highlight--metadata-buffer-tables buf-meta))
+                       new))))))
+
+    ;; Proceed only if a table metadata entry exists (or was created).
     (when table-meta
-      (let ((setf-fn
-             (if (eq type 'col)
-                 (lambda (tbl val)
-                   (setf (org-table-highlight--metadata-table-col-highlights tbl) val))
-               (lambda (tbl val)
-                 (setf (org-table-highlight--metadata-table-row-highlights tbl) val)))))
+      ;; 1. Update the table's context if the surrounding text has changed.
+      (let* ((stored-context (org-table-highlight--metadata-table-context table-meta))
+             (new-after-string (org-table-highlight--metadata-context-after-string table-context)))
+        (unless (equal (org-table-highlight--metadata-context-after-string stored-context)
+                       new-after-string)
+          (setf (org-table-highlight--metadata-context-after-string stored-context)
+                new-after-string)))
+
+      ;; 2. Modify the highlights list for the specified type (col or row).
+      (let ((highlights-accessor (if (eq type 'col)
+                                     #'org-table-highlight--metadata-table-col-highlights
+                                   #'org-table-highlight--metadata-table-row-highlights))
+            (highlights-setter (if (eq type 'col)
+                                   (lambda (tbl val) (setf (org-table-highlight--metadata-table-col-highlights tbl) val))
+                                 (lambda (tbl val) (setf (org-table-highlight--metadata-table-row-highlights tbl) val)))))
         (if (null index)
-            ;; Remove whole table
-            (when remove (funcall setf-fn table-meta nil))
-          ;; Modify highlights based on TYPE
-          (let* ((getf (if (eq type 'col)
-                           #'org-table-highlight--metadata-table-col-highlights
-                         #'org-table-highlight--metadata-table-row-highlights))
-                 (existing (funcall getf table-meta))
-                 (filtered (cl-remove-if (lambda (x) (= (car x) index)) existing)))
-            (funcall setf-fn table-meta
+            ;; Clear all highlights of this type if INDEX is nil and REMOVE is true.
+            (when remove (funcall highlights-setter table-meta nil))
+          ;; Add or remove a highlight for a specific INDEX.
+          (let* ((current-highlights (funcall highlights-accessor table-meta))
+                 (filtered-highlights (cl-remove-if (lambda (entry) (= (car entry) index)) current-highlights)))
+            (funcall highlights-setter table-meta
                      (if remove
-                         filtered
-                       (let ((indice (list index :color color)))
+                         filtered-highlights
+                       ;; Add a new entry to the list.
+                       (let ((new-entry (list index :color color)))
                          (when predicate
-                           (setq indice (cons index (plist-put (cdr indice) :predicate predicate)))
+                           (setq new-entry (cons index (plist-put (cdr new-entry) :predicate predicate)))
                            (when extend
-                             (setq indice (cons index (plist-put (cdr indice) :extend t)))))
-                         (cons indice filtered)))))))
-
-      ;; Clean up table if both highlights are empty
-      (when (and (null (org-table-highlight--metadata-table-col-highlights table-meta))
-                 (null (org-table-highlight--metadata-table-row-highlights table-meta)))
-        (setf (org-table-highlight--metadata-buffer-tables buf-meta)
-              (delete table-meta (org-table-highlight--metadata-buffer-tables buf-meta)))))
-
-    ;; Clean up buffer if empty
-    (when (and buf-meta
-               (null (org-table-highlight--metadata-buffer-tables buf-meta)))
-      (setq org-table-highlight--metadata
-            (delete buf-meta org-table-highlight--metadata)))
-
+                             (setq new-entry (cons index (plist-put (cdr new-entry) :extend t)))))
+                         (cons new-entry filtered-highlights))))))))
+    
+    (org-table-highlight--cleanup-metadata buf-meta table-meta)
+    
+    ;; Persist the changes to the metadata file.
     (org-table-highlight-save-metadata)))
 
 (defun org-table-highlight--table-bounds ()
@@ -728,13 +748,7 @@ Also cleans up empty highlight lists inside TABLE-META."
       ((= index ref-index)
        (setcar entry (1- index)))
       ((= index (1- ref-index))
-       (setcar entry (1+ index))))))
-
-  ;; Cleanup if table-meta has no highlights left
-  (when (and (null (org-table-highlight--metadata-table-row-highlights table-meta))
-             (null (org-table-highlight--metadata-table-col-highlights table-meta)))
-    ;; Upstream should remove table-meta from buffer
-    (message "Highlight table is now empty — should be removed upstream.")))
+       (setcar entry (1+ index)))))))
 
 (defun org-table-highlight--fix-indice (handle)
   "Update highlight metadata after a column or row is inserted or deleted.
@@ -775,9 +789,10 @@ This function is intended to be called after structural edits (e.g., with
             (let ((row (car row-highlight)))
               (org-table-highlight--fix-indice-1 row ref-row handle row-highlight table-meta)))))
 
+      (org-table-highlight--cleanup-metadata buf-meta table-meta)
+      (org-table-highlight-save-metadata)
       (org-table-highlight-clear-all-highlights 'keep-metadata)
-      (org-table-highlight-restore)
-      (org-table-highlight--collect-buffer-metadata))))
+      (org-table-highlight-restore))))
 
 (defun org-table-highlight-clear-buffer-overlays ()
   "Clear all Org table highlight overlays in the current buffer.
@@ -852,6 +867,55 @@ Behavior depends on the prefix argument (\\[universal-argument]):
             (unless (org-table-highlight--metadata--get-buffer (buffer-name buffer))
               (princ (format "(No highlights found in %s)\n" (buffer-name buffer))))))))))
 
+(defun org-table-highlight--after-insert-column ()
+  "Advice: Fix highlight indices after inserting a column."
+  (org-table-highlight--fix-indice 'insert))
+
+(defun org-table-highlight--after-delete-column ()
+  "Advice: Fix highlight indices after deleting a column."
+  (org-table-highlight--fix-indice 'delete-column))
+
+(defun org-table-highlight--after-move-column (&optional move)
+  "Advice: Fix highlight indices after moving a column.
+When MOVE non-nils, move column right"
+  (org-table-highlight--fix-indice (or move 'right)))
+
+(defun org-table-highlight--after-insert-row (&optional arg)
+  "Advice: Fix highlight indices after inserting a row.
+When ARG nils, insert above, otherwise insert below."
+  (org-table-highlight--fix-indice (if arg 'below 'above)))
+
+(defun org-table-highlight--after-kill-row ()
+  "Advice: Fix highlight indices after killing a row."
+  (org-table-highlight--fix-indice 'delete-row))
+
+(defun org-table-highlight--after-move-row (&optional move)
+  "Advice: Fix highlight indices after moving a row.
+When MOVE non-nils, move row down."
+  (org-table-highlight--fix-indice (or move 'down)))
+
+(defun org-table-highlight--enable-advice ()
+  "Enable all org-table-highlight related advices."
+  (advice-add 'org-table-align :after #'org-table-highlight-restore)
+  (advice-add 'org-table-next-field :after #'org-table-highlight-restore)
+  (advice-add 'org-table-insert-column :after #'org-table-highlight--after-insert-column)
+  (advice-add 'org-table-delete-column :after #'org-table-highlight--after-delete-column)
+  (advice-add 'org-table-move-column :after #'org-table-highlight--after-move-column)
+  (advice-add 'org-table-insert-row :after #'org-table-highlight--after-insert-row)
+  (advice-add 'org-table-kill-row :after #'org-table-highlight--after-kill-row)
+  (advice-add 'org-table-move-row :after #'org-table-highlight--after-move-row))
+
+(defun org-table-highlight--disable-advice ()
+  "Disable all org-table-highlight related advices."
+  (advice-remove 'org-table-align #'org-table-highlight-restore)
+  (advice-remove 'org-table-next-field #'org-table-highlight-restore)
+  (advice-remove 'org-table-insert-column #'org-table-highlight--after-insert-column)
+  (advice-remove 'org-table-delete-column #'org-table-highlight--after-delete-column)
+  (advice-remove 'org-table-move-column #'org-table-highlight--after-move-column)
+  (advice-remove 'org-table-insert-row #'org-table-highlight--after-insert-row)
+  (advice-remove 'org-table-kill-row #'org-table-highlight--after-kill-row)
+  (advice-remove 'org-table-move-row #'org-table-highlight--after-move-row))
+
 ;;;###autoload
 (define-minor-mode org-table-highlight-mode
   "Minor mode to enable or disable Org table highlighting.
@@ -868,60 +932,15 @@ When disabled:
   :group 'org-table-highlight
   (if org-table-highlight-mode
       (progn
-        (advice-add 'org-table-align :after #'org-table-highlight-restore)
-        (advice-add 'org-table-next-field :after #'org-table-highlight-restore)
-
-        (advice-add 'org-table-insert-column :after
-                    #'(lambda () (org-table-highlight--fix-indice 'insert)))
-        (advice-add 'org-table-delete-column :after
-                    #'(lambda () (org-table-highlight--fix-indice 'delete-column)))
-        (advice-add 'org-table-move-column :after
-                    #'(lambda (&optional move)
-                        (org-table-highlight--fix-indice (or move 'right))))
-
-        (advice-add 'org-table-insert-row :after
-                    #'(lambda (&optional arg)
-                        (org-table-highlight--fix-indice (if arg 'below 'above))))
-        (advice-add 'org-table-kill-row :after
-                    #'(lambda () (org-table-highlight--fix-indice 'delete-row)))
-        (advice-add 'org-table-move-row :after
-                    #'(lambda (&optional move)
-                        (org-table-highlight--fix-indice (or move 'down))))
-
+        (org-table-highlight--enable-advice)
         (add-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata nil t)
-
-        ;; Restore highlights if metadata exists
         (org-table-highlight-apply-buffer-metadata)
         (message "org-table-highlight-mode enabled."))
-
     (progn
-      ;; Remove ALL highlights in the buffer (overlays and metadata)
       (when (derived-mode-p 'org-mode)
         (org-table-highlight-clear-buffer-overlays))
-
-      ;; Remove advices
-      (advice-remove 'org-table-align #'org-table-highlight-restore)
-      (advice-remove 'org-table-next-field #'org-table-highlight-restore)
-
-      (advice-remove 'org-table-insert-column
-                     #'(lambda () (org-table-highlight--fix-indice 'insert)))
-      (advice-remove 'org-table-delete-column
-                     #'(lambda () (org-table-highlight--fix-indice 'delete-column)))
-      (advice-remove 'org-table-move-column
-                     #'(lambda (&optional move)
-                         (org-table-highlight--fix-indice (or move 'right))))
-
-      (advice-remove 'org-table-insert-row
-                     #'(lambda (&optional arg)
-                         (org-table-highlight--fix-indice (if arg 'below 'above))))
-      (advice-remove 'org-table-kill-row
-                     #'(lambda () (org-table-highlight--fix-indice 'delete-row)))
-      (advice-remove 'org-table-move-row
-                     #'(lambda (&optional move)
-                         (org-table-highlight--fix-indice (or move 'down))))
-
+      (org-table-highlight--disable-advice)
       (remove-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata t)
-
       (message "org-table-highlight-mode disabled: all highlights and metadata cleared, while metadata remains uncleared.."))))
 
 (provide 'org-table-highlight)
