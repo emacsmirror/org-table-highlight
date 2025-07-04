@@ -405,7 +405,8 @@ Returns a lambda that takes a string VAL."
                       (skip-chars-backward "^|")
                       (point))
                     `(:background ,chosen-color)
-                    'org-table-highlight-column col :predicate predicate :extend t)
+                    'org-table-highlight-column col :predicate predicate :extend t
+                    :help-echo (when predicate (format "Predicate: %s" predicate)))
                  (org-table-highlight--make-overlay
                   beg end `(:background ,chosen-color)
                   'org-table-highlight-column col :predicate predicate))))
