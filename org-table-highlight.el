@@ -2,7 +2,7 @@
 
 ;; Author: Lei Zhe
 ;; URL: https://github.com/llcc/org-table-highlight
-;; Version: 0.4
+;; Version: 0.5
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: org-table, convenience
 
@@ -16,6 +16,7 @@
 
 (require 'org-element)
 (require 'org-table)
+(require 'cl-lib)
 
 (defgroup org-table-highlight nil
   "Highlight columns and rows in Org tables."
