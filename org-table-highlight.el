@@ -464,7 +464,7 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
         (org-table-highlight--make-overlay start end `(:background ,chosen-color)
                                            'org-table-highlight-row row)))))
 
-(defun org-table-highlight-restore ()
+(defun org-table-highlight-restore-table ()
   "Restore highlights for the Org table at point using stored metadata."
   (interactive)
   (when (org-at-table-p)
@@ -623,7 +623,7 @@ Keep metadata if KEEP-METADATA non-nils."
     point))
 
 ;;;###autoload
-(defun org-table-highlight-apply-buffer-metadata ()
+(defun org-table-highlight-restore-buffer ()
   "Apply highlight metadata to all tables in the current buffer."
   (interactive)
   (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name))))
@@ -689,7 +689,7 @@ or nil if there are no highlight overlays."
              :col-highlights (nreverse col-highlights)
              :row-highlights (nreverse row-highlights))))))))
 
-(defun org-table-highlight--collect-buffer-metadata ()
+(defun org-table-highlight--refresh-buffer-metadata ()
   "Collect highlight metadata from all tables in the current buffer.
 
 Returns a list of entries of the form:
@@ -807,7 +807,7 @@ This function is intended to be called after structural edits (e.g., with
       (org-table-highlight--cleanup-metadata buf-meta table-meta)
       (org-table-highlight-save-metadata)
       (org-table-highlight-clear-all-highlights 'keep-metadata)
-      (org-table-highlight-restore))))
+      (org-table-highlight-restore-table))))
 
 (defun org-table-highlight-clear-buffer-overlays ()
   "Clear all Org table highlight overlays in the current buffer.
@@ -911,8 +911,8 @@ When MOVE non-nils, move row down."
 
 (defun org-table-highlight--enable-advice ()
   "Enable all org-table-highlight related advices."
-  (advice-add 'org-table-align :after #'org-table-highlight-restore)
-  (advice-add 'org-table-next-field :after #'org-table-highlight-restore)
+  (advice-add 'org-table-align :after #'org-table-highlight-restore-table)
+  (advice-add 'org-table-next-field :after #'org-table-highlight-restore-table)
   (advice-add 'org-table-insert-column :after #'org-table-highlight--after-insert-column)
   (advice-add 'org-table-delete-column :after #'org-table-highlight--after-delete-column)
   (advice-add 'org-table-move-column :after #'org-table-highlight--after-move-column)
@@ -922,8 +922,8 @@ When MOVE non-nils, move row down."
 
 (defun org-table-highlight--disable-advice ()
   "Disable all org-table-highlight related advices."
-  (advice-remove 'org-table-align #'org-table-highlight-restore)
-  (advice-remove 'org-table-next-field #'org-table-highlight-restore)
+  (advice-remove 'org-table-align #'org-table-highlight-restore-table)
+  (advice-remove 'org-table-next-field #'org-table-highlight-restore-table)
   (advice-remove 'org-table-insert-column #'org-table-highlight--after-insert-column)
   (advice-remove 'org-table-delete-column #'org-table-highlight--after-delete-column)
   (advice-remove 'org-table-move-column #'org-table-highlight--after-move-column)
@@ -948,14 +948,14 @@ When disabled:
   (if org-table-highlight-mode
       (progn
         (org-table-highlight--enable-advice)
-        (add-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata nil t)
-        (org-table-highlight-apply-buffer-metadata)
+        (add-hook 'kill-buffer-hook #'org-table-highlight--refresh-buffer-metadata nil t)
+        (org-table-highlight-restore-buffer)
         (message "org-table-highlight-mode enabled."))
     (progn
       (when (derived-mode-p 'org-mode)
         (org-table-highlight-clear-buffer-overlays))
       (org-table-highlight--disable-advice)
-      (remove-hook 'kill-buffer-hook #'org-table-highlight--collect-buffer-metadata t)
+      (remove-hook 'kill-buffer-hook #'org-table-highlight--refresh-buffer-metadata t)
       (message "org-table-highlight-mode disabled: all highlights cleared, while metadata remains uncleared.."))))
 
 (provide 'org-table-highlight)
