@@ -1006,7 +1006,6 @@ When MOVE non-nils, move row down."
 (defun org-table-highlight--enable-advice ()
   "Enable all org-table-highlight related advices."
   (advice-add 'org-table-align :after #'org-table-highlight-restore-table)
-  (advice-add 'org-table-next-field :after #'org-table-highlight-restore-table)
   (advice-add 'org-table-insert-column :after #'org-table-highlight--after-insert-column)
   (advice-add 'org-table-delete-column :after #'org-table-highlight--after-delete-column)
   (advice-add 'org-table-move-column :after #'org-table-highlight--after-move-column)
@@ -1017,7 +1016,6 @@ When MOVE non-nils, move row down."
 (defun org-table-highlight--disable-advice ()
   "Disable all org-table-highlight related advices."
   (advice-remove 'org-table-align #'org-table-highlight-restore-table)
-  (advice-remove 'org-table-next-field #'org-table-highlight-restore-table)
   (advice-remove 'org-table-insert-column #'org-table-highlight--after-insert-column)
   (advice-remove 'org-table-delete-column #'org-table-highlight--after-delete-column)
   (advice-remove 'org-table-move-column #'org-table-highlight--after-move-column)
