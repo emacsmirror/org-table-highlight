@@ -521,7 +521,7 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
   "Restore highlights for the Org table at point using stored metadata.
 
 If TYPE is nil, all column and row highlights are restored.  If TYPE is
-'col or 'row, only the corresponding type of highlights is restored.
+\='col or \='row, only the corresponding type of highlights is restored.
 
 If INDEX is provided, only the highlight at that column or row index is
 restored.  This is useful for restoring a single updated highlight after
@@ -708,9 +708,7 @@ Keep metadata if KEEP-METADATA non-nils."
             ;; Apply rows
             (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
               (cl-destructuring-bind (row . props) row-entry
-                (let ((color (plist-get props :color))
-                      (predicate (plist-get props :predicate))
-                      (extend (plist-get props :extend)))
+                (let ((color (plist-get props :color)))
                   (goto-char (org-table-begin))
                   (forward-line (1- row))
                   (org-table-highlight-row color))))))))))
@@ -793,8 +791,8 @@ Arguments:
   - right / down → Shift right if before REF-INDEX, left if at REF-INDEX.
 
 Return nil if unchanged, or a plist like:
-  '(:changed OLD NEW)
-  '(:removed OLD)"
+  (:changed OLD NEW)
+  (:removed OLD)"
   (let ((old-index index) (changed t))
     
     (pcase handle
