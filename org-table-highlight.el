@@ -420,43 +420,42 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
   ;; Ensure we're inside a table
   (unless (org-at-table-p)
     (user-error "Not in an Org table"))
+  
+  (let* ((buf-name (buffer-name))
+         (table-context (org-table-highlight--table-context))
+         (table-meta
+          (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
+            (org-table-highlight--metadata--get-table buf-meta table-context)))
+         (highlighted-columns-count
+          (if table-meta
+              (length (org-table-highlight--metadata-table-col-highlights table-meta))
+            0))
+         (priority (org-table-highlight--overlay-priority table-meta))
+         (col (org-table-current-column))
+         (chosen-color (or color (org-table-highlight--next-color
+                                  highlighted-columns-count)))
+         (bounds (org-table-highlight--table-bounds))
+         (predicate-fn (when predicate
+                         (org-table-highlight--parse-comparison predicate))))
 
-  ;; Prevent duplicate highlight
-  (unless (org-table-highlight--overlayp 'org-table-highlight-column)
-    (let* ((buf-name (buffer-name))
-           (table-context (org-table-highlight--table-context))
-           (table-meta
-            (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
-              (org-table-highlight--metadata--get-table buf-meta table-context)))
-           (highlighted-columns-count
-            (if table-meta
-                (length (org-table-highlight--metadata-table-col-highlights table-meta))
-              0))
-           (priority (org-table-highlight--overlay-priority table-meta))
-           (col (org-table-current-column))
-           (chosen-color (or color (org-table-highlight--next-color
-                                    highlighted-columns-count)))
-           (bounds (org-table-highlight--table-bounds))
-           (predicate-fn (when predicate
-                           (org-table-highlight--parse-comparison predicate))))
+    ;; Save metadata
+    (org-table-highlight--update-metadata
+     buf-name table-context 'col col chosen-color predicate extend)
 
-      ;; Save metadata
-      (org-table-highlight--update-metadata
-       buf-name table-context 'col col chosen-color predicate extend)
-
-      ;; Apply overlays inside narrowed region
-      (save-restriction
-        (narrow-to-region (car bounds) (cdr bounds))
-        (save-excursion
-          (goto-char (point-min))
-          (while (not (eobp))
-            (let ((beg (point)) (end (line-end-position)) (i 0))
-              (while (and (< i col)
-                          (re-search-forward
-                           (if (org-at-table-hline-p) "[|\\+]" "|")
-                           end t))
-                (setq beg (point))
-                (setq i (1+ i)))
+    ;; Apply overlays inside narrowed region
+    (save-restriction
+      (narrow-to-region (car bounds) (cdr bounds))
+      (save-excursion
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((beg (point)) (end (line-end-position)) (i 0))
+            (while (and (< i col)
+                        (re-search-forward
+                         (if (org-at-table-hline-p) "[|\\+]" "|")
+                         end t))
+              (setq beg (point))
+              (setq i (1+ i)))
+            (unless (org-table-highlight--overlayp 'org-table-highlight-column)
               (setq end (progn (skip-chars-forward (if (org-at-table-hline-p) "-" "^|"))
                                (point)))
               (when (or (null predicate-fn)
@@ -479,8 +478,8 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
                   (org-table-highlight--make-overlay
                    beg end `(:background ,chosen-color)
                    'org-table-highlight-column col :predicate predicate
-                   'priority priority))))
-            (forward-line 1)))))))
+                   'priority priority)))))
+          (forward-line 1))))))
 
 ;;;###autoload
 (defun org-table-highlight-row (&optional color)
@@ -488,33 +487,35 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
 With a prefix argument (\\[universal-argument]), prompt for a color."
   (interactive
    (list (when current-prefix-arg (read-color "Row color: " t))))
-  (when (and (org-at-table-p)
-             (not (org-table-highlight--overlayp 'org-table-highlight-row)))
-    (let* ((buf-name (buffer-name))
-           (table-context (org-table-highlight--table-context))
-           (table-meta
-            (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
-              (org-table-highlight--metadata--get-table buf-meta table-context)))
-           (highlighted-rows-count
-            (if table-meta
-                (length (org-table-highlight--metadata-table-row-highlights table-meta))
-              0))
-           (priority (org-table-highlight--overlay-priority table-meta))
-           (row (org-table-current-line))
-           (chosen-color (or color (org-table-highlight--next-color highlighted-rows-count)))
-           (start (save-excursion
-                    (goto-char (line-beginning-position))
-                    (back-to-indentation)
-                    (point)))
-           (end (save-excursion
-                  (goto-char (line-end-position))
-                  (skip-chars-backward "^|")
-                  (point))))
-      (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil nil)
-      (unless (org-table-highlight--overlayp 'org-table-highlight-row)
-        (org-table-highlight--make-overlay start end `(:background ,chosen-color)
-                                           'org-table-highlight-row row
-                                           'priority priority)))))
+
+  (unless (org-at-table-p)
+    (user-error "Not in an Org table"))
+  
+  (let* ((buf-name (buffer-name))
+         (table-context (org-table-highlight--table-context))
+         (table-meta
+          (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
+            (org-table-highlight--metadata--get-table buf-meta table-context)))
+         (highlighted-rows-count
+          (if table-meta
+              (length (org-table-highlight--metadata-table-row-highlights table-meta))
+            0))
+         (priority (org-table-highlight--overlay-priority table-meta))
+         (row (org-table-current-line))
+         (chosen-color (or color (org-table-highlight--next-color highlighted-rows-count)))
+         (start (save-excursion
+                  (goto-char (line-beginning-position))
+                  (back-to-indentation)
+                  (point)))
+         (end (save-excursion
+                (goto-char (line-end-position))
+                (skip-chars-backward "^|")
+                (point))))
+    (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil nil)
+    (unless (org-table-highlight--overlayp 'org-table-highlight-row)
+      (org-table-highlight--make-overlay start end `(:background ,chosen-color)
+                                         'org-table-highlight-row row
+                                         'priority priority))))
 
 (defun org-table-highlight-restore-table (&optional type index)
   "Restore highlights for the Org table at point using stored metadata.
@@ -663,27 +664,28 @@ Keep metadata if KEEP-METADATA non-nils."
 
 (defun org-table-highlight--get-table-position (context)
   "Get position of table beginning position based on CONTEXT."
-  (let ((name (org-table-highlight--metadata-context-name context))
-        (before-string (org-table-highlight--metadata-context-before-string context))
-        (after-string (org-table-highlight--metadata-context-after-string context))
-        point)
+  (save-excursion
+    (let ((name (org-table-highlight--metadata-context-name context))
+          (before-string (org-table-highlight--metadata-context-before-string context))
+          (after-string (org-table-highlight--metadata-context-after-string context))
+          point)
 
-    (goto-char (point-min))
+      (goto-char (point-min))
 
-    (if name
-        (progn (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote name)) nil t)
-               (setq point (1+ (point))))
+      (if name
+          (progn (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote name)) nil t)
+                 (setq point (1+ (point))))
 
-      (if (and before-string (search-forward before-string (point-max) t))
-          (progn
-            (goto-char (match-end 0))
-            (setq point (point))))
+        (if (and before-string (search-forward before-string (point-max) t))
+            (progn
+              (goto-char (match-end 0))
+              (setq point (point))))
 
-      (if (and after-string (search-forward after-string (point-max) t))
-          (progn
-            (goto-char (match-beginning 0))
-            (setq point (point)))))
-    point))
+        (if (and after-string (search-forward after-string (point-max) t))
+            (progn
+              (goto-char (match-beginning 0))
+              (setq point (point)))))
+      point)))
 
 ;;;###autoload
 (defun org-table-highlight-restore-buffer ()
@@ -698,18 +700,20 @@ Keep metadata if KEEP-METADATA non-nils."
             ;; Apply columns
             (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
               (cl-destructuring-bind (col . props) col-entry
-                (let ((color (plist-get col-entry :color))
-                      (predicate (plist-get col-entry :predicate))
-                      (extend (plist-get col-entry :extend)))
+                (let ((color (plist-get props :color))
+                      (predicate (plist-get props :predicate))
+                      (extend (plist-get props :extend)))
                   (org-table-goto-column col)
                   (org-table-highlight-column color predicate extend))))
             ;; Apply rows
             (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
-              (let ((row (car row-entry))
-                    (color (plist-get (cdr row-entry) :color)))
-                (goto-char (org-table-begin))
-                (forward-line (1- row))
-                (org-table-highlight-row color)))))))))
+              (cl-destructuring-bind (row . props) row-entry
+                (let ((color (plist-get props :color))
+                      (predicate (plist-get props :predicate))
+                      (extend (plist-get props :extend)))
+                  (goto-char (org-table-begin))
+                  (forward-line (1- row))
+                  (org-table-highlight-row color))))))))))
 
 (defun org-table-highlight--collect-table-metadata (tbl)
   "Collect highlight metadata from TBL (an `org-element' table).
