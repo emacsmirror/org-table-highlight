@@ -6,6 +6,21 @@
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: org-table, convenience
 
+;; This file is not part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or
+;; modify it under the terms of the GNU General Public License as
+;; published by the Free Software Foundation, either version 3 of the
+;; License, or (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful, but
+;; WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;; General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 ;;; Commentary:
 
 ;; This package provides utilities to highlight columns and rows in Org-mode tables.
@@ -463,14 +478,8 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
                                  (string-trim (buffer-substring-no-properties beg end))))
                 (if extend
                     (org-table-highlight--make-overlay
-                     (save-excursion
-                       (goto-char (line-beginning-position))
-                       (back-to-indentation)
-                       (point))
-                     (save-excursion
-                       (goto-char (line-end-position))
-                       (skip-chars-backward "^|")
-                       (point))
+                     (save-excursion (beginning-of-line) (back-to-indentation) (point))
+                     (save-excursion (end-of-line) (skip-chars-backward "^|") (point))
                      `(:background ,chosen-color)
                      'org-table-highlight-column col :predicate predicate :extend t
                      'help-echo (when predicate (format "Predicate: %s" predicate))
@@ -503,14 +512,8 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
          (priority (org-table-highlight--overlay-priority table-meta))
          (row (org-table-current-line))
          (chosen-color (or color (org-table-highlight--next-color highlighted-rows-count)))
-         (start (save-excursion
-                  (goto-char (line-beginning-position))
-                  (back-to-indentation)
-                  (point)))
-         (end (save-excursion
-                (goto-char (line-end-position))
-                (skip-chars-backward "^|")
-                (point))))
+         (start (save-excursion (beginning-of-line) (back-to-indentation) (point)))
+         (end (save-excursion (end-of-line) (skip-chars-backward "^|") (point))))
     (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil nil)
     (unless (org-table-highlight--overlayp 'org-table-highlight-row)
       (org-table-highlight--make-overlay start end `(:background ,chosen-color)
