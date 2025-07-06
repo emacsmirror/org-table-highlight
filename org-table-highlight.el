@@ -176,21 +176,21 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
           ;; Find buffer metadata, creating it if it nils when adding a highlight..
           (or (org-table-highlight--metadata--get-buffer buffer-name)
               (unless remove
-                (let ((new (make-org-table-highlight--metadata-buffer
+                (let ((new-index (make-org-table-highlight--metadata-buffer
                             :name buffer-name :tables nil)))
-                  (push new org-table-highlight--metadata)
-                  new))))
+                  (push new-index org-table-highlight--metadata)
+                  new-index))))
          (table-meta
           ;; Find table metadata, creating it only if adding a highlight.
           (and buf-meta
                (or (org-table-highlight--metadata--get-table buf-meta table-context)
                    (unless remove
-                     (let ((new (make-org-table-highlight--metadata-table
+                     (let ((new-index (make-org-table-highlight--metadata-table
                                  :context table-context
                                  :col-highlights nil
                                  :row-highlights nil)))
-                       (push new (org-table-highlight--metadata-buffer-tables buf-meta))
-                       new))))))
+                       (push new-index (org-table-highlight--metadata-buffer-tables buf-meta))
+                       new-index))))))
 
     ;; Proceed only if a table metadata entry exists (or was created).
     (when table-meta
@@ -218,7 +218,7 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
             (funcall highlights-setter table-meta
                      (if remove
                          filtered-highlights
-                       ;; Add a new entry to the list.
+                       ;; Add a new-index entry to the list.
                        (let ((new-entry (list index :color color)))
                          (when predicate
                            (setq new-entry (cons index (plist-put (cdr new-entry) :predicate predicate)))
@@ -391,7 +391,7 @@ Returns a lambda that takes a string VAL."
     `(lambda (val) (or ,@and-forms))))
 
 (defun org-table-highlight--overlay-priority (table-meta)
-  "Compute an overlay priority for new highlights in TABLE-META.
+  "Compute an overlay priority for new-index highlights in TABLE-META.
 
 If TABLE-META is nil, return a default priority (e.g., 100)."
   (if (null table-meta)
@@ -514,8 +514,15 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
                                            'org-table-highlight-row row
                                            'priority priority)))))
 
-(defun org-table-highlight-restore-table ()
-  "Restore highlights for the Org table at point using stored metadata."
+(defun org-table-highlight-restore-table (&optional type index)
+  "Restore highlights for the Org table at point using stored metadata.
+
+If TYPE is nil, all column and row highlights are restored.  If TYPE is
+'col or 'row, only the corresponding type of highlights is restored.
+
+If INDEX is provided, only the highlight at that column or row index is
+restored.  This is useful for restoring a single updated highlight after
+a structural change."
   (interactive)
   (when (org-at-table-p)
     (when-let* ((buffer-name (buffer-name))
@@ -524,22 +531,26 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
                 (table-meta (org-table-highlight--metadata--get-table buf-meta table-context)))
 
       ;; Reapply column highlights
-      (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
-        (cl-destructuring-bind (col . props) col-entry
-          (let ((color (plist-get props :color))
-                (predicate (plist-get props :predicate))
-                (extend (plist-get props :extend)))
-            (save-excursion
-              (org-table-goto-column col)
-              (org-table-highlight-column color predicate extend)))))
+      (when (or (null type) (eq type 'col))
+        (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
+          (cl-destructuring-bind (col . props) col-entry
+            (let ((color (plist-get props :color))
+                  (predicate (plist-get props :predicate))
+                  (extend (plist-get props :extend)))
+              (when (or (null index) (= index col))
+                (save-excursion
+                  (org-table-goto-column col)
+                  (org-table-highlight-column color predicate extend)))))))
 
       ;; Reapply row highlights
-      (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
-        (cl-destructuring-bind (row . props) row-entry
-          (let ((color (plist-get props :color)))
-            (save-excursion
-              (org-table-goto-line row)
-              (org-table-highlight-row color))))))))
+      (when (or (null type) (eq type 'row))
+        (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
+          (cl-destructuring-bind (row . props) row-entry
+            (let ((color (plist-get props :color)))
+              (when (or (null type) (= index row))
+                (save-excursion
+                  (org-table-goto-line row)
+                  (org-table-highlight-row color))))))))))
 
 ;;;###autoload
 (defun org-table-highlight-clear-column-highlights (&optional all)
@@ -775,45 +786,56 @@ Arguments:
   - left / up → Shift left if after REF-INDEX, right if at REF-INDEX.
   - right / down → Shift right if before REF-INDEX, left if at REF-INDEX.
 
-Returns non-nil if ENTRY remains, or nil if removed.
-Also cleans up empty highlight lists inside TABLE-META."
-  (pcase handle
-    ;; Insertion shifts highlights at or after insertion index
-    ((or 'insert 'above)
-     (when (>= index ref-index)
-       (setcar entry (1+ index))))
+Return nil if unchanged, or a plist like:
+  '(:changed OLD NEW)
+  '(:removed OLD)"
+  (let ((old-index index) (changed t))
+    
+    (pcase handle
+      ;; Insertion shifts highlights at or after insertion index
+      ((or 'insert 'above)
+       (when (>= index ref-index)
+         (setcar entry (1+ index))))
 
-    ;; Deletion may remove or shift
-    ((or 'delete-row 'delete-column)
-     (cond
-      ((= index ref-index)
-       ;; Remove ENTRY from the correct list
-       (pcase handle
-         ('delete-row
-          (setf (org-table-highlight--metadata-table-row-highlights table-meta)
-                (cl-remove-if (lambda (r) (= (car r) index))
-                              (org-table-highlight--metadata-table-row-highlights table-meta))))
-         ('delete-column
-          (setf (org-table-highlight--metadata-table-col-highlights table-meta)
-                (cl-remove-if (lambda (c) (= (car c) index))
-                              (org-table-highlight--metadata-table-col-highlights table-meta))))))
-      ((> index ref-index)
-       (setcar entry (1- index)))))
+      ;; Deletion may remove or shift
+      ((or 'delete-row 'delete-column)
+       (cond
+        ((= index ref-index)
+         ;; Remove ENTRY from the correct list
+         (pcase handle
+           ('delete-row
+            (setf (org-table-highlight--metadata-table-row-highlights table-meta)
+                  (cl-remove-if (lambda (r) (= (car r) index))
+                                (org-table-highlight--metadata-table-row-highlights table-meta))))
+           ('delete-column
+            (setf (org-table-highlight--metadata-table-col-highlights table-meta)
+                  (cl-remove-if (lambda (c) (= (car c) index))
+                                (org-table-highlight--metadata-table-col-highlights table-meta)))))
+         (setq changed :removed))
+        ((> index ref-index)
+         (setcar entry (1- index)))))
 
-    ;; Reordering (left/up/down/right)
-    ((or 'left 'up)
-     (cond
-      ((= index ref-index)
-       (setcar entry (1+ index)))
-      ((= index (1+ ref-index))
-       (setcar entry (1- index)))))
+      ;; Reordering (left/up/down/right)
+      ((or 'left 'up)
+       (cond
+        ((= index ref-index)
+         (setcar entry (1+ index)))
+        ((= index (1+ ref-index))
+         (setcar entry (1- index)))))
 
-    ((or 'right 'down)
-     (cond
-      ((= index ref-index)
-       (setcar entry (1- index)))
-      ((= index (1- ref-index))
-       (setcar entry (1+ index)))))))
+      ((or 'right 'down)
+       (cond
+        ((= index ref-index)
+         (setcar entry (1- index)))
+        ((= index (1- ref-index))
+         (setcar entry (1+ index)))))
+      
+      (_ (setq changed nil)))
+
+    (cond
+     ((eq changed :removed) `(:removed ,old-index))
+     (changed `(:changed ,old-index ,(car entry)))
+     (t nil))))
 
 (defun org-table-highlight--fix-indice (handle)
   "Update highlight metadata after a column or row is inserted or deleted.
@@ -829,8 +851,7 @@ It does the following:
 3. Adjusts all metadata entries (i.e., highlighted columns and rows) that occur
    after the insertion/deletion point, shifting their indices accordingly or
    removing entries that are deleted.
-4. Clears all overlays (without clearing metadata), then restores them based on
-   the updated metadata.
+4. Clear all overlays changed, then restores them based on the updated metadata.
 5. Updates the metadata in `org-table-highlight--metadata' accordingly.
 
 This function is intended to be called after structural edits (e.g., with
@@ -838,26 +859,39 @@ This function is intended to be called after structural edits (e.g., with
   (save-excursion
     (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name)))
                 (table-context (org-table-highlight--table-context))
-                (table-meta (org-table-highlight--metadata--get-table buf-meta table-context)))
-
-      (unless (member handle '(up down below above delete-row)) ;; ignore row editing operations
-        (when-let* ((ref-column (org-table-current-column))
+                (table-meta (org-table-highlight--metadata--get-table buf-meta table-context))
+                (bounds (org-table-highlight--table-bounds)))
+      
+      (unless (memq handle '(up down below above delete-row))
+        (when-let* ((ref-col (org-table-current-column))
                     (col-highlights (org-table-highlight--metadata-table-col-highlights table-meta)))
           (dolist (col-highlight col-highlights)
-            (let ((col (car col-highlight)))
-              (org-table-highlight--fix-indice-1 col ref-column handle col-highlight table-meta)))))
-
-      (unless (member handle '(left right delete-column)) ;; ignore column editing operations
+            (when-let ((result (org-table-highlight--fix-indice-1
+                                (car col-highlight) ref-col handle col-highlight table-meta)))
+              (pcase result
+                (`(:removed ,old-index) nil)
+                (`(:changed ,old-index ,new-index)
+                 (progn
+                   (org-table-highlight--remove-overlays
+                    (car bounds) (cdr bounds) 'org-table-highlight-column old-index)
+                   (org-table-highlight-restore-table 'col new-index))))))))
+        
+      (unless (memq handle '(left right delete-column))
         (when-let* ((ref-row (org-table-current-line))
                     (row-highlights (org-table-highlight--metadata-table-row-highlights table-meta)))
           (dolist (row-highlight row-highlights)
-            (let ((row (car row-highlight)))
-              (org-table-highlight--fix-indice-1 row ref-row handle row-highlight table-meta)))))
-
+            (when-let ((result (org-table-highlight--fix-indice-1
+                                (car row-highlight) ref-row handle row-highlight table-meta)))
+              (pcase result
+                (`(:removed ,old-index) nil)
+                (`(:changed ,old-index ,new-index)
+                 (progn
+                   (org-table-highlight--remove-overlays
+                    (car bounds) (cdr bounds) 'org-table-highlight-column old-index)
+                   (org-table-highlight-restore-table 'col new-index))))))))
+        
       (org-table-highlight--cleanup-metadata buf-meta table-meta)
-      (org-table-highlight-save-metadata)
-      (org-table-highlight-clear-all-highlights 'keep-metadata)
-      (org-table-highlight-restore-table))))
+      (org-table-highlight-save-metadata))))
 
 (defun org-table-highlight-clear-buffer-overlays ()
   "Clear all Org table highlight overlays in the current buffer.
