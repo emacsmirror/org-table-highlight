@@ -263,6 +263,39 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
                (or (not value) (equal (overlay-get ov prop) value)))
       (delete-overlay ov))))
 
+(defun org-table-highlight-debug-overlays-at-point ()
+  "Print debug info for all org-table-highlight overlays at point."
+  (interactive)
+  (let ((overlays (overlays-at (point))))
+    (if overlays
+        (dolist (ov overlays)
+          (let ((column-index (overlay-get ov 'org-table-highlight-column))
+                (row-index (overlay-get ov 'org-table-highlight-row)))
+            (when (or column-index row-index)
+                (message
+                 (concat
+                  "Overlay: %S\n"
+                  "  Range     : %d – %d\n"
+                  "  Face      : %S\n"
+                  "  Priority  : %S\n"
+                  "  Type      : %S\n"
+                  "  Index     : %S\n"
+                  "  Predicate : %S\n"
+                  "  Extend    : %S")
+                 ov
+                 (overlay-start ov)
+                 (overlay-end ov)
+                 (overlay-get ov 'face)
+                 (overlay-get ov 'priority)
+                 (cond
+                  (column-index 'column)
+                  (row-index 'row)
+                  (t 'unknown))
+                 (or column-index row-index)
+                 (overlay-get ov 'predicate)
+                 (overlay-get ov 'extend)))))
+      (message "No overlays at point."))))
+
 (defun org-table-highlight--get-table-name ()
   "Try to get the Org table name via #+NAME."
   (when-let* ((table (org-element-lineage
