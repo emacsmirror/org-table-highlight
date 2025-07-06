@@ -710,7 +710,7 @@ Keep metadata if KEEP-METADATA non-nils."
               (cl-destructuring-bind (row . props) row-entry
                 (let ((color (plist-get props :color)))
                   (goto-char (org-table-begin))
-                  (forward-line (1- row))
+                  (org-table-goto-line row)
                   (org-table-highlight-row color))))))))))
 
 (defun org-table-highlight--collect-table-metadata (tbl)

@@ -325,3 +325,34 @@ The highlight should move to the right to stay on the same logical column."
       ;; Verify row highlight
       (should (equal row-highlights '((2 :color "#654321"))))))))
 
+(ert-deftest org-table-highlight--test-restore-buffer ()
+  "Test that row and column highlights are restored correctly."
+  (org-table-highlight--with-test-env
+   (org-table-highlight--with-temp-buffer
+    (org-table-goto-line 2)
+    (org-table-highlight-row "#00CED1")
+    (org-table-goto-column 2)
+    (org-table-highlight-column "#FF6347")
+
+    (org-table-highlight-mode -1)
+    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+
+    (org-table-highlight-mode 1)
+    (should (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+
+    ;; Save the buffer name and table context for later validation
+    (let* ((buf-name (buffer-name))
+           (table-context (org-table-highlight--table-context))
+           (table-meta
+            (org-table-highlight--metadata--get-table
+             (org-table-highlight--metadata--get-buffer buf-name)
+             table-context)))
+      
+      (should (equal (org-table-highlight--metadata-table-row-highlights table-meta)
+                     '((2 :color "#00CED1"))))
+      (should (equal (org-table-highlight--metadata-table-col-highlights table-meta)
+                     '((2 :color "#FF6347"))))))))
+
+
