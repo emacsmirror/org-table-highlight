@@ -199,8 +199,8 @@ The highlight should move to the right to stay on the same logical column."
       ;; The highlights should still be on columns 2 and 3 but swapped colors
       (should (equal col-highlights
                      ;; column 2 now has color from column 3, and column 3 has color from column 2
-                     '((2 :color "#00CED1")
-                       (1 :color "#FF6347"))))))))
+                     '((1 :color "#FF6347")
+                       (2 :color "#00CED1"))))))))
 
 (ert-deftest org-table-highlight--test-insert-row ()
   "Test that inserting a row above a highlighted row shifts the highlight downward."
@@ -219,6 +219,29 @@ The highlight should move to the right to stay on the same logical column."
                       (org-table-highlight--metadata--get-table
                        (org-table-highlight--metadata--get-buffer buffer-name)
                        table-context))
+                     '((3 :color "#FFA500"))))))))
+
+(ert-deftest org-table-highlight--test-insert-rows-and-columns ()
+  "Test that inserting a row above a highlighted row shifts the highlight downward."
+  (org-table-highlight--with-test-env
+   (org-table-highlight--with-temp-buffer
+    (org-table-goto-line 2)
+    (org-table-highlight-row "#FFA500")
+    (org-table-goto-column 2)
+    (org-table-highlight-column "#800080")
+    (org-table-insert-row)
+    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
+    (org-table-goto-column 2)
+    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+
+    (let* ((buffer-name (buffer-name))
+           (table-context (org-table-highlight--table-context))
+           (table (org-table-highlight--metadata--get-table
+                   (org-table-highlight--metadata--get-buffer buffer-name)
+                   table-context)))
+      (should (equal (org-table-highlight--metadata-table-col-highlights table)
+                     '((2 :color "#800080"))))
+      (should (equal (org-table-highlight--metadata-table-row-highlights table)
                      '((3 :color "#FFA500"))))))))
 
 (ert-deftest org-table-highlight--test-delete-row ()
@@ -267,8 +290,8 @@ The highlight should move to the right to stay on the same logical column."
                              (org-table-highlight--metadata--get-buffer buffer-name)
                              table-context))))
       (should (equal row-highlights
-                     '((2 :color "#FF6347")
-                       (3 :color "#00CED1"))))))))
+                     '((3 :color "#00CED1")
+                       (2 :color "#FF6347"))))))))
 
 (ert-deftest org-table-highlight--test-refresh-buffer-metadata ()
   "Test `org-table-highlight--refresh-buffer-metadata' returns correct table metadata."

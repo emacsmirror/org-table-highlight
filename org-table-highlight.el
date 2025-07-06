@@ -899,14 +899,7 @@ This function is intended to be called after structural edits (e.g., with
                                                    'org-table-highlight-row
                                                    (if (consp i) (car i) i)))))
 
-        ;; Restore changed
-        (dolist (entry changed)
-          (pcase entry
-            (`(col . (,_ . ,new))
-             (org-table-highlight-restore-table 'col new))
-            (`(row . (,_ . ,new))
-             (org-table-highlight-restore-table 'row new))))
-
+        (org-table-highlight-restore-table)
         (org-table-highlight--cleanup-metadata buf-meta table-meta)
         (org-table-highlight-save-metadata)))))
 
