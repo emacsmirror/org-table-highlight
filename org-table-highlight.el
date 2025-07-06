@@ -865,41 +865,50 @@ This function is intended to be called after structural edits (e.g., with
                 (table-context (org-table-highlight--table-context))
                 (table-meta (org-table-highlight--metadata--get-table buf-meta table-context))
                 (bounds (org-table-highlight--table-bounds)))
-      
-      (unless (memq handle '(up down below above delete-row))
-        (when-let* ((ref-col (org-table-current-column))
-                    (col-highlights (org-table-highlight--metadata-table-col-highlights table-meta)))
-          (dolist (col-highlight col-highlights)
-            (when-let ((result (org-table-highlight--fix-indice-1
-                                (car col-highlight) ref-col handle col-highlight table-meta)))
-              (pcase result
-                (`(:removed ,old-index)
-                 (org-table-highlight--remove-overlays
-                  (car bounds) (cdr bounds) 'org-table-highlight-column old-index))
-                (`(:changed ,old-index ,new-index)
-                 (progn
-                   (org-table-highlight--remove-overlays
-                    (car bounds) (cdr bounds) 'org-table-highlight-column old-index)
-                   (org-table-highlight-restore-table 'col new-index))))))))
-        
-      (unless (memq handle '(left right delete-column))
-        (when-let* ((ref-row (org-table-current-line))
-                    (row-highlights (org-table-highlight--metadata-table-row-highlights table-meta)))
-          (dolist (row-highlight row-highlights)
-            (when-let ((result (org-table-highlight--fix-indice-1
-                                (car row-highlight) ref-row handle row-highlight table-meta)))
-              (pcase result
-                (`(:removed ,old-index)
-                 (org-table-highlight--remove-overlays
-                  (car bounds) (cdr bounds) 'org-table-highlight-row old-index))
-                (`(:changed ,old-index ,new-index)
-                 (progn
-                   (org-table-highlight--remove-overlays
-                    (car bounds) (cdr bounds) 'org-table-highlight-row old-index)
-                   (org-table-highlight-restore-table 'row new-index))))))))
-        
-      (org-table-highlight--cleanup-metadata buf-meta table-meta)
-      (org-table-highlight-save-metadata))))
+      (let ((changed '())
+            (removed '()))
+        ;; Columns
+        (unless (memq handle '(up down below above delete-row))
+          (let ((ref-col (org-table-current-column)))
+            (dolist (col (org-table-highlight--metadata-table-col-highlights table-meta))
+              (when-let ((r (org-table-highlight--fix-indice-1
+                             (car col) ref-col handle col table-meta)))
+                (pcase r
+                  (`(:removed ,i) (push `(col . ,i) removed))
+                  (`(:changed ,old ,new) (push `(col . (,old . ,new)) changed)))))))
+
+        ;; Rows
+        (unless (memq handle '(left right delete-column))
+          (let ((ref-row (org-table-current-line)))
+            (dolist (row (org-table-highlight--metadata-table-row-highlights table-meta))
+              (when-let ((r (org-table-highlight--fix-indice-1
+                             (car row) ref-row handle row table-meta)))
+                (pcase r
+                  (`(:removed ,i) (push `(row . ,i) removed))
+                  (`(:changed ,old ,new) (push `(row . (,old . ,new)) changed)))))))
+
+        ;; Remove overlays
+        (dolist (entry (append removed changed))
+          (pcase entry
+            (`(col . ,i)
+             (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
+                                                   'org-table-highlight-column
+                                                   (if (consp i) (car i) i)))
+            (`(row . ,i)
+             (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
+                                                   'org-table-highlight-row
+                                                   (if (consp i) (car i) i)))))
+
+        ;; Restore changed
+        (dolist (entry changed)
+          (pcase entry
+            (`(col . (,_ . ,new))
+             (org-table-highlight-restore-table 'col new))
+            (`(row . (,_ . ,new))
+             (org-table-highlight-restore-table 'row new))))
+
+        (org-table-highlight--cleanup-metadata buf-meta table-meta)
+        (org-table-highlight-save-metadata)))))
 
 (defun org-table-highlight-clear-buffer-overlays ()
   "Clear all Org table highlight overlays in the current buffer.
