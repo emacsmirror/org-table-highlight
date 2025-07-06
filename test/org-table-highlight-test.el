@@ -175,6 +175,33 @@ The highlight should move to the right to stay on the same logical column."
                        table-context))
                      '((1 :color "#0000FF"))))))))
 
+(ert-deftest org-table-highlight--test-move-two-highlighted-columns ()
+  "Test switching two highlighted columns by moving them sequentially."
+  (org-table-highlight--with-test-env
+   (org-table-highlight--with-temp-buffer
+    (org-table-goto-column 1)
+    (org-table-highlight-column "#00CED1")
+    (org-table-goto-column 2)
+    (org-table-highlight-column "#FF6347")
+
+    (org-table-goto-column 1)
+    (org-table-move-column)
+
+    ;; Check overlays exist
+    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+
+    (let* ((buffer-name (buffer-name))
+           (table-context (org-table-highlight--table-context))
+           (col-highlights (org-table-highlight--metadata-table-col-highlights
+                            (org-table-highlight--metadata--get-table
+                             (org-table-highlight--metadata--get-buffer buffer-name)
+                             table-context))))
+      ;; The highlights should still be on columns 2 and 3 but swapped colors
+      (should (equal col-highlights
+                     ;; column 2 now has color from column 3, and column 3 has color from column 2
+                     '((2 :color "#00CED1")
+                       (1 :color "#FF6347"))))))))
+
 (ert-deftest org-table-highlight--test-insert-row ()
   "Test that inserting a row above a highlighted row shifts the highlight downward."
   (org-table-highlight--with-test-env
@@ -220,6 +247,28 @@ The highlight should move to the right to stay on the same logical column."
                        (org-table-highlight--metadata--get-buffer buffer-name)
                        table-context))
                      '((3 :color "#00CED1"))))))))
+
+(ert-deftest org-table-highlight--test-move-two-highlighted-rows ()
+  "Test switching two highlighted rows by moving them sequentially."
+  (org-table-highlight--with-test-env
+   (org-table-highlight--with-temp-buffer
+    (org-table-goto-line 2)
+    (org-table-highlight-row "#00CED1")
+    (org-table-goto-line 3)
+    (org-table-highlight-row "#FF6347")
+    
+    (org-table-goto-line 2)
+    (org-table-move-row)
+
+    (let* ((buffer-name (buffer-name))
+           (table-context (org-table-highlight--table-context))
+           (row-highlights (org-table-highlight--metadata-table-row-highlights
+                            (org-table-highlight--metadata--get-table
+                             (org-table-highlight--metadata--get-buffer buffer-name)
+                             table-context))))
+      (should (equal row-highlights
+                     '((2 :color "#FF6347")
+                       (3 :color "#00CED1"))))))))
 
 (ert-deftest org-table-highlight--test-refresh-buffer-metadata ()
   "Test `org-table-highlight--refresh-buffer-metadata' returns correct table metadata."
