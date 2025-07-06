@@ -221,12 +221,12 @@ The highlight should move to the right to stay on the same logical column."
                        table-context))
                      '((3 :color "#00CED1"))))))))
 
-(ert-deftest org-table-highlight--test-collect-buffer-metadata ()
-  "Test `org-table-highlight--collect-buffer-metadata` returns correct table metadata."
+(ert-deftest org-table-highlight--test-refresh-buffer-metadata ()
+  "Test `org-table-highlight--refresh-buffer-metadata' returns correct table metadata."
   (org-table-highlight--with-test-env
    (org-table-highlight--with-temp-buffer
     ;; https://github.com/llcc/org-table-highlight/issues/4
-    (org-table-highlight--collect-buffer-metadata)
+    (org-table-highlight--refresh-buffer-metadata)
     (should-not org-table-highlight--metadata)
     
     ;; Highlight a column and a row
@@ -235,7 +235,7 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-goto-line 2)
     (org-table-highlight-row "#654321")
 
-    (org-table-highlight--collect-buffer-metadata)
+    (org-table-highlight--refresh-buffer-metadata)
     
     ;; Now collect metadata
     (let* ((buffer-name (buffer-name))

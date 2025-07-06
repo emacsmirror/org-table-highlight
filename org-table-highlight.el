@@ -278,6 +278,7 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
                   "  Range     : %d – %d\n"
                   "  Face      : %S\n"
                   "  Priority  : %S\n"
+                  "  Evaporate : %S\n"
                   "  Type      : %S\n"
                   "  Index     : %S\n"
                   "  Predicate : %S\n"
@@ -287,6 +288,7 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
                  (overlay-end ov)
                  (overlay-get ov 'face)
                  (overlay-get ov 'priority)
+                 (overlay-get ov 'evaporate)
                  (cond
                   (column-index 'column)
                   (row-index 'row)
@@ -869,7 +871,9 @@ This function is intended to be called after structural edits (e.g., with
             (when-let ((result (org-table-highlight--fix-indice-1
                                 (car col-highlight) ref-col handle col-highlight table-meta)))
               (pcase result
-                (`(:removed ,old-index) nil)
+                (`(:removed ,old-index)
+                 (org-table-highlight--remove-overlays
+                  (car bounds) (cdr bounds) 'org-table-highlight-column old-index))
                 (`(:changed ,old-index ,new-index)
                  (progn
                    (org-table-highlight--remove-overlays
@@ -883,12 +887,14 @@ This function is intended to be called after structural edits (e.g., with
             (when-let ((result (org-table-highlight--fix-indice-1
                                 (car row-highlight) ref-row handle row-highlight table-meta)))
               (pcase result
-                (`(:removed ,old-index) nil)
+                (`(:removed ,old-index)
+                 (org-table-highlight--remove-overlays
+                  (car bounds) (cdr bounds) 'org-table-highlight-row old-index))
                 (`(:changed ,old-index ,new-index)
                  (progn
                    (org-table-highlight--remove-overlays
-                    (car bounds) (cdr bounds) 'org-table-highlight-column old-index)
-                   (org-table-highlight-restore-table 'col new-index))))))))
+                    (car bounds) (cdr bounds) 'org-table-highlight-row old-index)
+                   (org-table-highlight-restore-table 'row new-index))))))))
         
       (org-table-highlight--cleanup-metadata buf-meta table-meta)
       (org-table-highlight-save-metadata))))
