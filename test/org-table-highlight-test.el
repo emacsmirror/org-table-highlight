@@ -293,6 +293,39 @@ The highlight should move to the right to stay on the same logical column."
                      '((3 :color "#00CED1")
                        (2 :color "#FF6347"))))))))
 
+(ert-deftest org-table-highlight--test-insert-rows-and-columns ()
+  "Test switching two highlighted rows by moving them sequentially."
+  (org-table-highlight--with-test-env
+   (org-table-highlight--with-temp-buffer
+    (org-table-goto-line 2)
+    (org-table-highlight-row "#00CED1")
+    (org-table-goto-column 2)
+    (org-table-highlight-column "#FF6347")
+    
+    (org-table-goto-line 3)
+    (org-table-goto-column 2)
+    (end-of-line)
+    (org-table-insert-column)
+    (org-table-next-field)
+
+    (org-table-goto-line 2)
+    (org-table-goto-column 3)
+    (should (org-table-highlight--overlayp 'org-table-highlight-row))
+
+    (org-table-goto-line 4)
+    (org-table-goto-column 2)
+    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+
+    (let* ((buffer-name (buffer-name))
+           (table-context (org-table-highlight--table-context))
+           (table (org-table-highlight--metadata--get-table
+                   (org-table-highlight--metadata--get-buffer buffer-name)
+                   table-context))
+           (col-highlights (org-table-highlight--metadata-table-col-highlights table))
+           (row-highlights (org-table-highlight--metadata-table-row-highlights table)))
+      (should (equal row-highlights '((2 :color "#00CED1"))))
+      (should (equal col-highlights '((2 :color "#FF6347"))))))))
+
 (ert-deftest org-table-highlight--test-refresh-buffer-metadata ()
   "Test `org-table-highlight--refresh-buffer-metadata' returns correct table metadata."
   (org-table-highlight--with-test-env
