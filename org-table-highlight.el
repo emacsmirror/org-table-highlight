@@ -257,13 +257,11 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
   (nth (mod counter (length org-table-highlight-color-palette))
        org-table-highlight-color-palette))
 
-(defun org-table-highlight--make-overlay (start end face &rest properties)
-  "Create an overlay from START to END with FACE and extra overlay PROPERTIES.
+(defun org-table-highlight--make-overlay (start end &rest properties)
+  "Create an overlay from START to END with overlay PROPERTIES.
 
-FACE is applied to the \='face property.
 PROPERTIES is a plist of additional overlay properties like :symbol value."
   (let ((ov (make-overlay start end)))
-    (overlay-put ov 'face face)
     (overlay-put ov 'evaporate t)
     (while properties
       (let ((prop (pop properties))
@@ -271,11 +269,16 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
         (overlay-put ov prop val)))
     ov))
 
-(defun org-table-highlight--remove-overlays (start end prop &optional value)
-  "Delete overlays between START and END that have PROP (and optionally VALUE)."
+(defun org-table-highlight--remove-overlays (start end &optional type index)
+  "Delete overlays between START and END with `org-table-highlight' property.
+
+Only remove overlays where `:org-table-highlight` is TYPE (e.g., \='col
+or \='row).  If INDEX is non-nil, also match `:index` to INDEX."
   (dolist (ov (overlays-in start end))
-    (when (and (overlay-get ov prop)
-               (or (not value) (equal (overlay-get ov prop) value)))
+    (when (or (null type)
+              (and (equal (overlay-get ov 'org-table-highlight) type)
+                   (or (null index)
+                       (equal (overlay-get ov 'index) index))))
       (delete-overlay ov))))
 
 (defun org-table-highlight-debug-overlays-at-point ()
@@ -284,33 +287,32 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
   (let ((overlays (overlays-at (point))))
     (if overlays
         (dolist (ov overlays)
-          (let ((column-index (overlay-get ov 'org-table-highlight-column))
-                (row-index (overlay-get ov 'org-table-highlight-row)))
-            (when (or column-index row-index)
-                (message
-                 (concat
-                  "Overlay: %S\n"
-                  "  Range     : %d – %d\n"
-                  "  Face      : %S\n"
-                  "  Priority  : %S\n"
-                  "  Evaporate : %S\n"
-                  "  Type      : %S\n"
-                  "  Index     : %S\n"
-                  "  Predicate : %S\n"
-                  "  Extend    : %S")
-                 ov
-                 (overlay-start ov)
-                 (overlay-end ov)
-                 (overlay-get ov 'face)
-                 (overlay-get ov 'priority)
-                 (overlay-get ov 'evaporate)
-                 (cond
-                  (column-index 'column)
-                  (row-index 'row)
-                  (t 'unknown))
-                 (or column-index row-index)
-                 (overlay-get ov 'predicate)
-                 (overlay-get ov 'extend)))))
+          (when-let* ((type (overlay-get ov 'org-table-highlight))
+                      (index (overlay-get ov 'index)))
+            (message
+             (concat
+              "Overlay: %S\n"
+              "  Range     : %d – %d\n"
+              "  Face      : %S\n"
+              "  Priority  : %S\n"
+              "  Evaporate : %S\n"
+              "  Type      : %S\n"
+              "  Index     : %S\n"
+              "  Predicate : %S\n"
+              "  Extend    : %S")
+             ov
+             (overlay-start ov)
+             (overlay-end ov)
+             (overlay-get ov 'face)
+             (overlay-get ov 'priority)
+             (overlay-get ov 'evaporate)
+             (pcase type
+              ('col 'column)
+              ('row 'row)
+              (_ 'unknown))
+             index
+             (overlay-get ov 'predicate)
+             (overlay-get ov 'extend))))
       (message "No overlays at point."))))
 
 (defun org-table-highlight--get-table-name ()
@@ -319,13 +321,14 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
                       (org-element-context) 'table t)))
     (plist-get (cadr table) :name)))
 
-(defun org-table-highlight--overlayp (prop &optional value)
-  "Return non-nil if an overlay with PROP (and optional VALUE) exists at point.
+(defun org-table-highlight--overlayp (type &optional index)
+  "Return non-nil if an overlay with TYPE (and optional INDEX) exists at point.
 
-If VALUE is non-nil, only return true if PROP equals VALUE."
+If INDEX is non-nil, only return true if :index equals index."
   (cl-some (lambda (ov)
-             (let ((ov-val (overlay-get ov prop)))
-               (and ov-val (or (not value) (equal ov-val value)))))
+             (let ((ov-type (overlay-get ov 'org-table-highlight)))
+               (and (equal ov-type type)
+                    (or (not index) (equal (overlay-get ov 'index) index)))))
            (overlays-at (point))))
 
 (defcustom org-table-highlight-table-context-length 20
@@ -470,7 +473,7 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
                          end t))
               (setq beg (point))
               (setq i (1+ i)))
-            (unless (org-table-highlight--overlayp 'org-table-highlight-column)
+            (unless (org-table-highlight--overlayp 'col)
               (setq end (progn (skip-chars-forward (if (org-at-table-hline-p) "-" "^|"))
                                (point)))
               (when (or (null predicate-fn)
@@ -480,14 +483,20 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
                     (org-table-highlight--make-overlay
                      (save-excursion (beginning-of-line) (back-to-indentation) (point))
                      (save-excursion (end-of-line) (skip-chars-backward "^|") (point))
-                     `(:background ,chosen-color)
-                     'org-table-highlight-column col :predicate predicate :extend t
+                     'org-table-highlight 'col
+                     'index col
+                     'face `(:background ,chosen-color)
                      'help-echo (when predicate (format "Predicate: %s" predicate))
-                     'priority priority)
+                     'priority priority
+                     'predicate predicate
+                     'extend t)
                   (org-table-highlight--make-overlay
-                   beg end `(:background ,chosen-color)
-                   'org-table-highlight-column col :predicate predicate
-                   'priority priority)))))
+                   beg end
+                   'org-table-highlight 'col
+                   'index col
+                   'face `(:background ,chosen-color)
+                   'priority priority
+                   'predicate predicate)))))
           (forward-line 1))))))
 
 ;;;###autoload
@@ -515,9 +524,11 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
          (start (save-excursion (beginning-of-line) (back-to-indentation) (point)))
          (end (save-excursion (end-of-line) (skip-chars-backward "^|") (point))))
     (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil nil)
-    (unless (org-table-highlight--overlayp 'org-table-highlight-row)
-      (org-table-highlight--make-overlay start end `(:background ,chosen-color)
-                                         'org-table-highlight-row row
+    (unless (org-table-highlight--overlayp 'row)
+      (org-table-highlight--make-overlay start end
+                                         'face `(:background ,chosen-color)
+                                         'org-table-highlight 'row
+                                         'index row
                                          'priority priority))))
 
 (defun org-table-highlight-restore-table (&optional type index)
@@ -571,15 +582,14 @@ current column."
 
   (let ((col-to-clear (unless all (org-table-current-column))))
     (when (or (not col-to-clear)
-              (org-table-highlight--overlayp 'org-table-highlight-column col-to-clear))
+              (org-table-highlight--overlayp 'col col-to-clear))
       (when-let* ((buf-name (buffer-name))
                   (table-context (org-table-highlight--table-context))
                   (bounds (org-table-highlight--table-bounds)))
         (org-table-highlight--update-metadata
          buf-name table-context 'col col-to-clear nil nil nil 'remove)
         (org-table-highlight--remove-overlays
-         (car bounds) (cdr bounds)
-         'org-table-highlight-column col-to-clear)))))
+         (car bounds) (cdr bounds) 'col col-to-clear)))))
 
 ;;;###autoload
 (defun org-table-highlight-clear-row-highlights (&optional all)
@@ -591,15 +601,14 @@ With prefix argument ALL, clear all row highlights."
   
   (let ((row-to-clear (unless all (org-table-current-line))))
     (when (or (not row-to-clear)
-              (org-table-highlight--overlayp 'org-table-highlight-row row-to-clear))
+              (org-table-highlight--overlayp 'row row-to-clear))
       (when-let* ((buf-name (buffer-name))
                   (table-context (org-table-highlight--table-context))
                   (bounds (org-table-highlight--table-bounds)))
         (org-table-highlight--update-metadata
            buf-name table-context 'row row-to-clear nil nil nil 'remove)
         (org-table-highlight--remove-overlays
-         (car bounds) (cdr bounds)
-         'org-table-highlight-row row-to-clear)))))
+         (car bounds) (cdr bounds) 'row row-to-clear)))))
 
 ;;;###autoload
 (defun org-table-highlight-clear-all-highlights (&optional keep-metadata)
@@ -611,10 +620,7 @@ Keep metadata if KEEP-METADATA non-nils."
     (user-error "Not in an Org table"))
   
   (when-let* ((bounds (org-table-highlight--table-bounds)))
-    (org-table-highlight--remove-overlays
-     (car bounds) (cdr bounds) 'org-table-highlight-column)
-    (org-table-highlight--remove-overlays
-     (car bounds) (cdr bounds) 'org-table-highlight-row))
+    (org-table-highlight--remove-overlays (car bounds) (cdr bounds)))
   
   (unless keep-metadata
     (when-let* ((buf-name (buffer-name))
@@ -694,6 +700,7 @@ Keep metadata if KEEP-METADATA non-nils."
 (defun org-table-highlight-restore-buffer ()
   "Apply highlight metadata to all tables in the current buffer."
   (interactive)
+  (org-table-highlight-load-metadata)
   (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name))))
     (dolist (table-meta (org-table-highlight--metadata-buffer-tables buf-meta))
       (let* ((table-context (org-table-highlight--metadata-table-context table-meta))
@@ -731,23 +738,19 @@ or nil if there are no highlight overlays."
          (row-highlights '()))
     (when overlays
       (dolist (ov overlays)
-        (let ((predicate (overlay-get ov :predicate))
-              (extend (overlay-get ov :extend))
-              (color (plist-get (overlay-get ov 'face) :background)))
-          (when-let* ((col (overlay-get ov 'org-table-highlight-column))
-                      (indice (list col :color color)))
-            (when predicate
-              (setq indice (cons col (plist-put (cdr indice) :predicate predicate)))
-              (when extend
-                (setq indice (cons col (plist-put (cdr indice) :extend t)))))
-            (cl-pushnew indice col-highlights :test #'equal))
-          (when-let* ((row (overlay-get ov 'org-table-highlight-row))
-                      (indice (list row :color color)))
-            (when predicate
-              (setq indice (cons row (plist-put (cdr indice) :predicate predicate)))
-              (when extend
-                (setq indice (cons row (plist-put (cdr indice) :extend t)))))
-            (cl-pushnew indice row-highlights :test #'equal))))
+        (let* ((type (overlay-get ov 'org-table-highlight))
+               (index (overlay-get ov 'index))
+               (predicate (overlay-get ov 'predicate))
+               (extend (overlay-get ov 'extend))
+               (color (plist-get (overlay-get ov 'face) :background))
+               (indice (list index :color color)))
+          (when predicate
+            (setq indice (cons index (plist-put (cdr indice) 'predicate predicate)))
+            (when extend
+              (setq indice (cons index (plist-put (cdr indice) 'extend t)))))
+          (pcase type
+            ('col (cl-pushnew indice col-highlights :test #'equal))
+            ('row (cl-pushnew indice row-highlights :test #'equal)))))
       (when (or col-highlights row-highlights)
         (save-excursion
           (goto-char begin)
@@ -895,12 +898,10 @@ This function is intended to be called after structural edits (e.g., with
           (pcase entry
             (`(col . ,i)
              (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
-                                                   'org-table-highlight-column
-                                                   (if (consp i) (car i) i)))
+                                                   'col (if (consp i) (car i) i)))
             (`(row . ,i)
              (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
-                                                   'org-table-highlight-row
-                                                   (if (consp i) (car i) i)))))
+                                                   'row (if (consp i) (car i) i)))))
 
         (org-table-highlight-restore-table)
         (org-table-highlight--cleanup-metadata buf-meta table-meta)
@@ -912,10 +913,7 @@ This function is intended to be called after structural edits (e.g., with
 This removes both column and row highlights overlays across the entire
 buffer, regardless of table context."
   (interactive)
-  (org-table-highlight--remove-overlays
-   (point-min) (point-max) 'org-table-highlight-column)
-  (org-table-highlight--remove-overlays
-   (point-min) (point-max) 'org-table-highlight-row)
+  (org-table-highlight--remove-overlays (point-min) (point-max))
   (message "All Org table highlight overlays removed from buffer."))
 
 ;;;###autoload

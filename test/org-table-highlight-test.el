@@ -31,17 +31,17 @@
     ;; contain any overlay.
     (org-table-goto-column 1)
     (org-table-highlight-column "#ABCDEF" ">1" 'extend)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should-not (org-table-highlight--overlayp 'col))
     (org-table-goto-line 3)
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
     (org-table-goto-column 2)
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
     
     ;; 2. Test normal highlighting
     (org-table-goto-line 2)
     (org-table-goto-column 2)
     (org-table-highlight-column "#AB11EF")
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
     ;; Check metadata
     (let ((buffer-name (buffer-name))
           (table-context (org-table-highlight--table-context))
@@ -59,7 +59,7 @@
    (org-table-highlight--with-temp-buffer
     (org-table-goto-line 2)
     (org-table-highlight-row "#ABCDEF")
-    (should (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should (org-table-highlight--overlayp 'row))
     ;; Check metadata
     (let ((buffer-name (buffer-name))
           (table-context (org-table-highlight--table-context))
@@ -82,11 +82,11 @@
     
     (org-table-highlight-clear-column-highlights)
     (should org-table-highlight--metadata)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should-not (org-table-highlight--overlayp 'col))
     
     (org-table-highlight-clear-column-highlights 'all)
     (org-table-goto-column 1)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should-not (org-table-highlight--overlayp 'col))
     (should-not org-table-highlight--metadata))))
 
 (ert-deftest org-table-highlight--test-clear-row-highlights ()
@@ -100,11 +100,11 @@
     
     (org-table-highlight-clear-row-highlights)
     (should org-table-highlight--metadata)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should-not (org-table-highlight--overlayp 'row))
 
     (org-table-highlight-clear-row-highlights 'all)
     (org-table-goto-line 1)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should-not (org-table-highlight--overlayp 'row))
     (should-not org-table-highlight--metadata))))
 
 (ert-deftest org-table-highlight--test-insert-column ()
@@ -115,12 +115,12 @@ The highlight should move to the right to stay on the same logical column."
    (org-table-highlight--with-temp-buffer
     (org-table-goto-column 2)
     (org-table-highlight-column "#FF0000")
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
     (org-table-insert-column)
     (org-table-goto-column 3)
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
     (org-table-goto-column 2)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should-not (org-table-highlight--overlayp 'col))
     
     (let ((buffer-name (buffer-name))
           (table-context (org-table-highlight--table-context))
@@ -138,14 +138,14 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-goto-column 2)
     (org-table-highlight-column "#00FF00")
     (org-table-delete-column)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should-not (org-table-highlight--overlayp 'col))
     (should-not org-table-highlight--metadata)
     
     (org-table-insert-column)
     (org-table-highlight-column "#00FF00")
     (org-table-goto-column 1)
     (org-table-delete-column)
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
     (should org-table-highlight--metadata)
     
     (let ((buffer-name (buffer-name))
@@ -163,9 +163,9 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-goto-column 2)
     (org-table-highlight-column "#0000FF")
     (org-table-move-column 'left)
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
     (org-table-goto-column 2)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should-not (org-table-highlight--overlayp 'col))
 
     (let ((buffer-name (buffer-name))
           (table-context (org-table-highlight--table-context)))
@@ -188,7 +188,7 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-move-column)
 
     ;; Check overlays exist
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
 
     (let* ((buffer-name (buffer-name))
            (table-context (org-table-highlight--table-context))
@@ -209,9 +209,9 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-goto-line 2)
     (org-table-highlight-row "#FFA500")
     (org-table-insert-row)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should-not (org-table-highlight--overlayp 'row))
     (org-table-goto-line 3)
-    (should (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should (org-table-highlight--overlayp 'row))
 
     (let ((buffer-name (buffer-name))
           (table-context (org-table-highlight--table-context)))
@@ -230,9 +230,9 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-goto-column 2)
     (org-table-highlight-column "#800080")
     (org-table-insert-row)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should-not (org-table-highlight--overlayp 'row))
     (org-table-goto-column 2)
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
 
     (let* ((buffer-name (buffer-name))
            (table-context (org-table-highlight--table-context))
@@ -251,7 +251,7 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-goto-line 2)
     (org-table-highlight-row "#800080") 
     (org-table-kill-row)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should-not (org-table-highlight--overlayp 'row))
     (should-not org-table-highlight--metadata))))
 
 (ert-deftest org-table-highlight--test-move-row ()
@@ -261,7 +261,7 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-goto-line 2)
     (org-table-highlight-row "#00CED1")
     (org-table-move-row)
-    (should (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should (org-table-highlight--overlayp 'row))
 
     (let ((buffer-name (buffer-name))
           (table-context (org-table-highlight--table-context)))
@@ -310,11 +310,11 @@ The highlight should move to the right to stay on the same logical column."
 
     (org-table-goto-line 2)
     (org-table-goto-column 3)
-    (should (org-table-highlight--overlayp 'org-table-highlight-row))
+    (should (org-table-highlight--overlayp 'row))
 
     (org-table-goto-line 4)
     (org-table-goto-column 2)
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'col))
 
     (let* ((buffer-name (buffer-name))
            (table-context (org-table-highlight--table-context))
@@ -368,12 +368,12 @@ The highlight should move to the right to stay on the same logical column."
     (org-table-highlight-column "#FF6347")
 
     (org-table-highlight-mode -1)
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-row))
-    (should-not (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should-not (org-table-highlight--overlayp 'row))
+    (should-not (org-table-highlight--overlayp 'col))
 
     (org-table-highlight-mode 1)
-    (should (org-table-highlight--overlayp 'org-table-highlight-row))
-    (should (org-table-highlight--overlayp 'org-table-highlight-column))
+    (should (org-table-highlight--overlayp 'row))
+    (should (org-table-highlight--overlayp 'col))
 
     ;; Save the buffer name and table context for later validation
     (let* ((buf-name (buffer-name))
