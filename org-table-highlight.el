@@ -490,7 +490,7 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
                  'help-echo (when predicate (format "Predicate: %s" predicate))
                  'priority priority
                  'predicate predicate
-                 'extend t))))
+                 'extend extend))))
           (forward-line 1))))))
 
 ;;;###autoload
