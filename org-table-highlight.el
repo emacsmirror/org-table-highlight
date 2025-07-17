@@ -526,14 +526,7 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
                                          'priority priority))))
 
 (defun org-table-highlight-restore-table (table-meta)
-  "Restore highlights for the Org table with TABLE-META.
-
-If TYPE is nil, all column and row highlights are restored.  If TYPE is
-\='col or \='row, only the corresponding type of highlights is restored.
-
-If INDEX is provided, only the highlight at that column or row index is
-restored.  This is useful for restoring a single updated highlight after
-a structural change."
+  "Restore highlights for the Org table with TABLE-META."
   (when-let* ((table-context (org-table-highlight--metadata-table-context table-meta))
               (pos (org-table-highlight--get-table-position table-context)))
     (save-excursion
