@@ -479,24 +479,18 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
               (when (or (null predicate-fn)
                         (funcall predicate-fn
                                  (string-trim (buffer-substring-no-properties beg end))))
-                (if extend
-                    (org-table-highlight--make-overlay
-                     (save-excursion (beginning-of-line) (back-to-indentation) (point))
-                     (save-excursion (end-of-line) (skip-chars-backward "^|") (point))
-                     'org-table-highlight 'col
-                     'index col
-                     'face `(:background ,chosen-color)
-                     'help-echo (when predicate (format "Predicate: %s" predicate))
-                     'priority priority
-                     'predicate predicate
-                     'extend t)
-                  (org-table-highlight--make-overlay
-                   beg end
-                   'org-table-highlight 'col
-                   'index col
-                   'face `(:background ,chosen-color)
-                   'priority priority
-                   'predicate predicate)))))
+                (when extend
+                  (setq beg (save-excursion (beginning-of-line) (back-to-indentation) (point))
+                        end (save-excursion (end-of-line) (skip-chars-backward "^|") (point))))
+                (org-table-highlight--make-overlay
+                 beg end
+                 'org-table-highlight 'col
+                 'index col
+                 'face `(:background ,chosen-color)
+                 'help-echo (when predicate (format "Predicate: %s" predicate))
+                 'priority priority
+                 'predicate predicate
+                 'extend t))))
           (forward-line 1))))))
 
 ;;;###autoload
@@ -531,8 +525,8 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
                                          'index row
                                          'priority priority))))
 
-(defun org-table-highlight-restore-table (&optional type index)
-  "Restore highlights for the Org table at point using stored metadata.
+(defun org-table-highlight-restore-table (table-meta &optional type index)
+  "Restore highlights for the Org table with TABLE-META.
 
 If TYPE is nil, all column and row highlights are restored.  If TYPE is
 \='col or \='row, only the corresponding type of highlights is restored.
@@ -540,13 +534,10 @@ If TYPE is nil, all column and row highlights are restored.  If TYPE is
 If INDEX is provided, only the highlight at that column or row index is
 restored.  This is useful for restoring a single updated highlight after
 a structural change."
-  (interactive)
-  (when (org-at-table-p)
-    (when-let* ((buffer-name (buffer-name))
-                (table-context (org-table-highlight--table-context))
-                (buf-meta (org-table-highlight--metadata--get-buffer buffer-name))
-                (table-meta (org-table-highlight--metadata--get-table buf-meta table-context)))
-
+  (when-let* ((table-context (org-table-highlight--metadata-table-context table-meta))
+              (pos (org-table-highlight--get-table-position table-context)))
+    (save-excursion
+      (goto-char pos)
       ;; Reapply column highlights
       (when (or (null type) (eq type 'col))
         (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
@@ -568,6 +559,15 @@ a structural change."
                 (save-excursion
                   (org-table-goto-line row)
                   (org-table-highlight-row color))))))))))
+
+(defun org-table-highlight-restore-table-at-point ()
+  "Restore highlights for the Org table at point."
+  (interactive)
+  (when-let* ((buffer-name (buffer-name))
+              (table-context (org-table-highlight--table-context))
+              (buf-meta (org-table-highlight--metadata--get-buffer buffer-name))
+              (table-meta (org-table-highlight--metadata--get-table buf-meta table-context)))
+    (org-table-highlight-restore-table table-meta)))
 
 ;;;###autoload
 (defun org-table-highlight-clear-column-highlights (&optional all)
@@ -611,34 +611,16 @@ With prefix argument ALL, clear all row highlights."
          (car bounds) (cdr bounds) 'row row-to-clear)))))
 
 ;;;###autoload
-(defun org-table-highlight-clear-all-highlights (&optional keep-metadata)
+(defun org-table-highlight-clear-all-highlights ()
   "Clear all column and row highlights in current Org table.
 
 Keep metadata if KEEP-METADATA non-nils."
-  (interactive "P")
+  (interactive)
   (unless (org-at-table-p)
     (user-error "Not in an Org table"))
   
   (when-let* ((bounds (org-table-highlight--table-bounds)))
-    (org-table-highlight--remove-overlays (car bounds) (cdr bounds)))
-  
-  (unless keep-metadata
-    (when-let* ((buf-name (buffer-name))
-                (table-context (org-table-highlight--table-context)))
-      (org-table-highlight--update-metadata
-       buf-name table-context 'col nil nil nil nil 'remove)
-      (org-table-highlight--update-metadata
-       buf-name table-context 'row nil nil nil nil 'remove))))
-
-(defun org-table-highlight--remove-plist-key (plist key)
-  "Return a copy of PLIST with KEY and its value removed."
-  (let (new-plist)
-    (while plist
-      (let ((k (pop plist))
-            (v (pop plist)))
-        (unless (eq k key)
-          (setq new-plist (plist-put new-plist k v)))))
-    new-plist))
+    (org-table-highlight--remove-overlays (car bounds) (cdr bounds))))
 
 (defcustom org-table-highlight-metadata-file
   (locate-user-emacs-file "org-table-highlight-metadata.el")
@@ -703,25 +685,7 @@ Keep metadata if KEEP-METADATA non-nils."
   (org-table-highlight-load-metadata)
   (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name))))
     (dolist (table-meta (org-table-highlight--metadata-buffer-tables buf-meta))
-      (let* ((table-context (org-table-highlight--metadata-table-context table-meta))
-             (pos (org-table-highlight--get-table-position table-context)))
-        (save-excursion
-          (when (and pos (goto-char pos))
-            ;; Apply columns
-            (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
-              (cl-destructuring-bind (col . props) col-entry
-                (let ((color (plist-get props :color))
-                      (predicate (plist-get props :predicate))
-                      (extend (plist-get props :extend)))
-                  (org-table-goto-column col)
-                  (org-table-highlight-column color predicate extend))))
-            ;; Apply rows
-            (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
-              (cl-destructuring-bind (row . props) row-entry
-                (let ((color (plist-get props :color)))
-                  (goto-char (org-table-begin))
-                  (org-table-goto-line row)
-                  (org-table-highlight-row color))))))))))
+      (org-table-highlight-restore-table table-meta))))
 
 (defun org-table-highlight--collect-table-metadata (tbl)
   "Collect highlight metadata from TBL (an `org-element' table).
@@ -823,7 +787,8 @@ Return nil if unchanged, or a plist like:
                                 (org-table-highlight--metadata-table-col-highlights table-meta)))))
          (setq changed :removed))
         ((> index ref-index)
-         (setcar entry (1- index)))))
+         (setcar entry (1- index)))
+        (t (setq changed nil))))
 
       ;; Reordering (left/up/down/right)
       ((or 'left 'up)
@@ -831,15 +796,17 @@ Return nil if unchanged, or a plist like:
         ((= index ref-index)
          (setcar entry (1+ index)))
         ((= index (1+ ref-index))
-         (setcar entry (1- index)))))
+         (setcar entry (1- index)))
+        (t (setq changed nil))))
 
       ((or 'right 'down)
        (cond
         ((= index ref-index)
          (setcar entry (1- index)))
         ((= index (1- ref-index))
-         (setcar entry (1+ index)))))
-      
+         (setcar entry (1+ index)))
+        (t (setq changed nil))))
+
       (_ (setq changed nil)))
 
     (cond
@@ -895,15 +862,12 @@ This function is intended to be called after structural edits (e.g., with
 
         ;; Remove overlays
         (dolist (entry (append removed changed))
-          (pcase entry
-            (`(col . ,i)
-             (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
-                                                   'col (if (consp i) (car i) i)))
-            (`(row . ,i)
-             (org-table-highlight--remove-overlays (car bounds) (cdr bounds)
-                                                   'row (if (consp i) (car i) i)))))
+          (cl-destructuring-bind (type . i) entry
+            (let ((idx (if (consp i) (car i) i)))
+              (org-table-highlight--remove-overlays (car bounds) (cdr bounds) type idx))))
 
-        (org-table-highlight-restore-table)
+        (unless removed
+          (org-table-highlight-restore-table table-meta))
         (org-table-highlight--cleanup-metadata buf-meta table-meta)
         (org-table-highlight-save-metadata)))))
 
@@ -1006,7 +970,7 @@ When MOVE non-nils, move row down."
 
 (defun org-table-highlight--enable-advice ()
   "Enable all org-table-highlight related advices."
-  (advice-add 'org-table-align :after #'org-table-highlight-restore-table)
+  (advice-add 'org-table-align :after #'org-table-highlight-restore-table-at-point)
   (advice-add 'org-table-insert-column :after #'org-table-highlight--after-insert-column)
   (advice-add 'org-table-delete-column :after #'org-table-highlight--after-delete-column)
   (advice-add 'org-table-move-column :after #'org-table-highlight--after-move-column)
@@ -1016,7 +980,7 @@ When MOVE non-nils, move row down."
 
 (defun org-table-highlight--disable-advice ()
   "Disable all org-table-highlight related advices."
-  (advice-remove 'org-table-align #'org-table-highlight-restore-table)
+  (advice-remove 'org-table-align #'org-table-highlight-restore-table-at-point)
   (advice-remove 'org-table-insert-column #'org-table-highlight--after-insert-column)
   (advice-remove 'org-table-delete-column #'org-table-highlight--after-delete-column)
   (advice-remove 'org-table-move-column #'org-table-highlight--after-move-column)
