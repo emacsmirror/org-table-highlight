@@ -525,7 +525,7 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
                                          'index row
                                          'priority priority))))
 
-(defun org-table-highlight-restore-table (table-meta &optional type index)
+(defun org-table-highlight-restore-table (table-meta)
   "Restore highlights for the Org table with TABLE-META.
 
 If TYPE is nil, all column and row highlights are restored.  If TYPE is
@@ -539,26 +539,20 @@ a structural change."
     (save-excursion
       (goto-char pos)
       ;; Reapply column highlights
-      (when (or (null type) (eq type 'col))
-        (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
-          (cl-destructuring-bind (col . props) col-entry
-            (let ((color (plist-get props :color))
-                  (predicate (plist-get props :predicate))
-                  (extend (plist-get props :extend)))
-              (when (or (null index) (= index col))
-                (save-excursion
-                  (org-table-goto-column col)
-                  (org-table-highlight-column color predicate extend)))))))
+      (dolist (col-entry (org-table-highlight--metadata-table-col-highlights table-meta))
+        (cl-destructuring-bind (col . props) col-entry
+          (let ((color (plist-get props :color))
+                (predicate (plist-get props :predicate))
+                (extend (plist-get props :extend)))
+            (org-table-goto-column col)
+            (org-table-highlight-column color predicate extend))))
 
       ;; Reapply row highlights
-      (when (or (null type) (eq type 'row))
-        (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
-          (cl-destructuring-bind (row . props) row-entry
-            (let ((color (plist-get props :color)))
-              (when (or (null type) (= index row))
-                (save-excursion
-                  (org-table-goto-line row)
-                  (org-table-highlight-row color))))))))))
+      (dolist (row-entry (org-table-highlight--metadata-table-row-highlights table-meta))
+        (cl-destructuring-bind (row . props) row-entry
+          (let ((color (plist-get props :color)))
+            (org-table-goto-line row)
+            (org-table-highlight-row color)))))))
 
 (defun org-table-highlight-restore-table-at-point ()
   "Restore highlights for the Org table at point."
