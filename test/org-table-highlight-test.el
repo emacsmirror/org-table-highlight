@@ -78,7 +78,6 @@
     (org-table-highlight-column "#ABCDEF")
     (org-table-goto-column 2)
     (org-table-highlight-column "#ABCDEF")
-
     
     (org-table-highlight-clear-column-highlights)
     (should org-table-highlight--metadata)
@@ -103,6 +102,25 @@
     (should-not (org-table-highlight--overlay-exist-p 'row))
 
     (org-table-highlight-clear-row-highlights 'all)
+    (org-table-goto-line 1)
+    (should-not (org-table-highlight--overlay-exist-p 'row))
+    (should-not org-table-highlight--metadata))))
+
+(ert-deftest org-table-highlight--test-clear-table-highlights ()
+  "Test clear functions remove overlays and metadata."
+  (org-table-highlight--with-test-env
+   (org-table-highlight--with-temp-buffer
+    (org-table-goto-line 1)
+    (org-table-highlight-row "#ABCDEF")
+    (org-table-goto-line 2)
+    (org-table-highlight-row "#ABCDEF")
+
+    (org-table-goto-column 1)
+    (org-table-highlight-column "#ABCDEF")
+    (org-table-goto-column 2)
+    (org-table-highlight-column "#ABCDEF")
+
+    (org-table-highlight-clear-table-highlights)
     (org-table-goto-line 1)
     (should-not (org-table-highlight--overlay-exist-p 'row))
     (should-not org-table-highlight--metadata))))
