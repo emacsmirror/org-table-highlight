@@ -2,7 +2,7 @@
 
 ;; Author: Lei Zhe
 ;; URL: https://github.com/llcc/org-table-highlight
-;; Version: 0.6
+;; Version: 0.7
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: org-table, convenience
 
@@ -53,14 +53,14 @@ reloads or Emacs restarts.
 Structure:
 
   ((BUFFER-NAME
-     (OTHM-TABLE ...)
+     (ORG-TABLE-HIGHLIGHT--METADATA-TABLE ...)
    )
    ...)
 
 Where:
 
 - BUFFER-NAME is a string.
-- Each OTHM-TABLE is a struct of type
+- Each ORG-TABLE-HIGHLIGHT--METADATA-TABLE is a struct of type
   `org-table-highlight--metadata-table', describing highlight state for
   a specific Org table in that buffer.
 
@@ -100,8 +100,8 @@ This variable is updated when:
 - Modifying table structure (inserting/deleting/moving rows/columns)
 - Collecting metadata on buffer kill
 
-It is saved to disk using `org-table-highlight-save-metadata`
-and restored using `org-table-highlight-load-metadata`.")
+It is saved to disk using `org-table-highlight--save-metadata'
+and restored using `org-table-highlight-load-metadata'.")
 
 (cl-defstruct org-table-highlight--metadata-context
   "Represents the context of an Org table within a buffer.
@@ -127,7 +127,7 @@ instances associated with it."
   tables)         ; List of `org-table-highlight--metadata-table'
                   ; structs in the buffer
 
-(defun org-table-highlight--metadata--get-buffer (buffer-name)
+(defun org-table-highlight--metadata-buffer (buffer-name)
   "Return the buffer struct whose name matches BUFFER-NAME.
 
 Returns nil if no such buffer is found."
@@ -135,7 +135,7 @@ Returns nil if no such buffer is found."
            :key #'org-table-highlight--metadata-buffer-name
            :test #'equal))
 
-(defun org-table-highlight--metadata--get-table (buf-meta table-context)
+(defun org-table-highlight--metadata-table (buf-meta table-context)
   "Return the table struct from BUF-META whose context matches TABLE-CONTEXT.
 
 Two contexts are considered equal if both their name and before-string
@@ -180,7 +180,7 @@ specific table within a specific buffer.
 
 BUFFER-NAME is the name of the buffer.
 TABLE-CONTEXT uniquely identifies the Org table.
-TYPE is either \='col or \='row.
+TYPE is either \='column or \='row.
 INDEX is the column or row number to update.
 COLOR is the highlight color string (e.g. \"#FF0000\").
 PREDICATE is string used to store a test condition for conditional highlighting.
@@ -189,21 +189,21 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
   
   (let* ((buf-meta
           ;; Find buffer metadata, creating it if it nils when adding a highlight..
-          (or (org-table-highlight--metadata--get-buffer buffer-name)
+          (or (org-table-highlight--metadata-buffer buffer-name)
               (unless remove
                 (let ((new-index (make-org-table-highlight--metadata-buffer
-                            :name buffer-name :tables nil)))
+                                  :name buffer-name :tables nil)))
                   (push new-index org-table-highlight--metadata)
                   new-index))))
          (table-meta
           ;; Find table metadata, creating it only if adding a highlight.
           (and buf-meta
-               (or (org-table-highlight--metadata--get-table buf-meta table-context)
+               (or (org-table-highlight--metadata-table buf-meta table-context)
                    (unless remove
                      (let ((new-index (make-org-table-highlight--metadata-table
-                                 :context table-context
-                                 :col-highlights nil
-                                 :row-highlights nil)))
+                                       :context table-context
+                                       :col-highlights nil
+                                       :row-highlights nil)))
                        (push new-index (org-table-highlight--metadata-buffer-tables buf-meta))
                        new-index))))))
 
@@ -217,11 +217,11 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
           (setf (org-table-highlight--metadata-context-after-string stored-context)
                 new-after-string)))
 
-      ;; 2. Modify the highlights list for the specified type (col or row).
-      (let ((highlights-accessor (if (eq type 'col)
+      ;; 2. Modify the highlights list for the specified type (column or row).
+      (let ((highlights-accessor (if (eq type 'column)
                                      #'org-table-highlight--metadata-table-col-highlights
                                    #'org-table-highlight--metadata-table-row-highlights))
-            (highlights-setter (if (eq type 'col)
+            (highlights-setter (if (eq type 'column)
                                    (lambda (tbl val) (setf (org-table-highlight--metadata-table-col-highlights tbl) val))
                                  (lambda (tbl val) (setf (org-table-highlight--metadata-table-row-highlights tbl) val)))))
         (if (null index)
@@ -240,24 +240,117 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
                            (when extend
                              (setq new-entry (cons index (plist-put (cdr new-entry) :extend t)))))
                          (cons new-entry filtered-highlights))))))))
-    
+
+    ;; Cleanup metadata if buf-meta or table-meta is none
     (org-table-highlight--cleanup-metadata buf-meta table-meta)
     
     ;; Persist the changes to the metadata file.
-    (org-table-highlight-save-metadata)))
+    (org-table-highlight--save-metadata)))
+
+(defcustom org-table-highlight-metadata-file
+  (locate-user-emacs-file "org-table-highlight-metadata.el")
+  "File where Org table highlight metadata is saved."
+  :type 'file
+  :group 'org-table-highlight)
+
+(defun org-table-highlight--save-metadata ()
+  "Save `org-table-highlight--metadata' to `org-table-highlight-metadata-file'."
+  (condition-case nil
+      (with-temp-file org-table-highlight-metadata-file
+        (insert ";;; org-table-highlight saved metadata. ")
+        (insert "Do not edit this file.\n\n")
+        (pp org-table-highlight--metadata (current-buffer))
+        (insert "\n"))
+    (error "Cannot save metadata to %s" org-table-highlight-metadata-file)))
+
+;;;###autoload
+(defun org-table-highlight-load-metadata ()
+  "Load Org table highlight metadata from `org-table-highlight-metadata-file'."
+  (interactive)
+  (when (file-exists-p org-table-highlight-metadata-file)
+    (condition-case nil
+        (progn (setq org-table-highlight--metadata
+                     (with-temp-buffer
+                       (insert-file-contents org-table-highlight-metadata-file)
+                       (goto-char (point-min))
+                       (read (current-buffer))))
+               (message "org-table-highlight--metadata variable loaded"))
+      (error "Cannot read metadata at %s" org-table-highlight-metadata-file))))
+
+(defun org-table-highlight--table-name ()
+  "Try to get the Org table name via #+NAME."
+  (when-let* ((table (org-element-lineage
+                      (org-element-context) 'table t)))
+    (plist-get (cadr table) :name)))
 
 (defun org-table-highlight--table-bounds ()
   "Return the (START . END) buffer positions of the current Org table."
-  (when (org-at-table-p)
-    (cons (save-excursion (org-table-begin))
-          (save-excursion (org-table-end)))))
+  (cons (save-excursion (org-table-begin))
+        (save-excursion (org-table-end))))
+
+(defcustom org-table-highlight-table-context-length 20
+  "Number of characters before and after an Org table to save as context.
+
+This context helps identify the table uniquely when it lacks a #+NAME:
+property.  It is used to match and restore highlights across sessions by
+storing a short prefix and suffix string around the table position."
+  :type 'integer
+  :group 'org-table-highlight)
+
+(defun org-table-highlight--table-context ()
+  "Return contextual metadata for the Org table at point.
+
+This includes the table's name (if any), a short string before the table,
+and a short string after it, used to help identify the table if it has
+no #+NAME:.  The length of these strings is controlled by
+`org-table-highlight-table-context-length'."
+  (save-excursion
+    (let* ((table-name (org-table-highlight--table-name))
+           (begin (org-table-begin))
+           (before-string
+            (buffer-substring-no-properties
+             (max (point-min) (- begin org-table-highlight-table-context-length))
+             begin))
+           (after-string
+            (buffer-substring-no-properties
+             begin
+             (min (point-max) (+ begin org-table-highlight-table-context-length)))))
+      (make-org-table-highlight--metadata-context
+       :name table-name
+       :before-string before-string
+       :after-string after-string))))
+
+(defun org-table-highlight--table-position (context)
+  "Get position of table beginning position based on CONTEXT."
+  (save-excursion
+    (let ((name (org-table-highlight--metadata-context-name context))
+          (before-string (org-table-highlight--metadata-context-before-string context))
+          (after-string (org-table-highlight--metadata-context-after-string context))
+          point)
+
+      (goto-char (point-min))
+
+      (if name
+          (progn (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote name)) nil t)
+                 (setq point (1+ (point))))
+
+        (if (and before-string (search-forward before-string (point-max) t))
+            (progn
+              (goto-char (match-end 0))
+              (setq point (point))))
+
+        (if (and after-string (search-forward after-string (point-max) t))
+            (progn
+              (goto-char (match-beginning 0))
+              (setq point (point)))))
+      point)))
 
 (defun org-table-highlight--next-color (counter)
   "Return the next color from the palette using COUNTER."
   (nth (mod counter (length org-table-highlight-color-palette))
        org-table-highlight-color-palette))
 
-(defun org-table-highlight--make-overlay (start end &rest properties)
+(defun org-table-highlight--overlay-create (start end &rest properties)
   "Create an overlay from START to END with overlay PROPERTIES.
 
 PROPERTIES is a plist of additional overlay properties like :symbol value."
@@ -269,10 +362,30 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
         (overlay-put ov prop val)))
     ov))
 
-(defun org-table-highlight--remove-overlays (start end &optional type index)
+(defun org-table-highlight--overlay-compute-priority (table-meta)
+  "Compute an overlay priority for new-index highlights in TABLE-META.
+
+If TABLE-META is nil, return a default priority (e.g., 100)."
+  (if table-meta
+      (+ 100
+       (length (org-table-highlight--metadata-table-col-highlights table-meta))
+       (length (org-table-highlight--metadata-table-row-highlights table-meta)))
+    100))
+
+(defun org-table-highlight--overlay-exist-p (type &optional index)
+  "Return non-nil if an overlay with TYPE (and optional INDEX) exists at point.
+
+If INDEX is non-nil, only return true if :index equals index."
+  (cl-some (lambda (ov)
+             (let ((ov-type (overlay-get ov 'org-table-highlight)))
+               (and (equal ov-type type)
+                    (or (not index) (equal (overlay-get ov 'index) index)))))
+           (overlays-at (point))))
+
+(defun org-table-highlight--overlay-remove (start end &optional type index)
   "Delete overlays between START and END with `org-table-highlight' property.
 
-Only remove overlays where `:org-table-highlight` is TYPE (e.g., \='col
+Only remove overlays where `:org-table-highlight' is TYPE (e.g., \='column
 or \='row).  If INDEX is non-nil, also match `:index` to INDEX."
   (dolist (ov (overlays-in start end))
     (when (or (null type)
@@ -281,7 +394,7 @@ or \='row).  If INDEX is non-nil, also match `:index` to INDEX."
                        (equal (overlay-get ov 'index) index))))
       (delete-overlay ov))))
 
-(defun org-table-highlight-debug-overlays-at-point ()
+(defun org-table-highlight-describe-overlays-at-point ()
   "Print debug info for all org-table-highlight overlays at point."
   (interactive)
   (let ((overlays (overlays-at (point))))
@@ -306,63 +419,11 @@ or \='row).  If INDEX is non-nil, also match `:index` to INDEX."
              (overlay-get ov 'face)
              (overlay-get ov 'priority)
              (overlay-get ov 'evaporate)
-             (pcase type
-              ('col 'column)
-              ('row 'row)
-              (_ 'unknown))
+             type
              index
              (overlay-get ov 'predicate)
              (overlay-get ov 'extend))))
       (message "No overlays at point."))))
-
-(defun org-table-highlight--get-table-name ()
-  "Try to get the Org table name via #+NAME."
-  (when-let* ((table (org-element-lineage
-                      (org-element-context) 'table t)))
-    (plist-get (cadr table) :name)))
-
-(defun org-table-highlight--overlayp (type &optional index)
-  "Return non-nil if an overlay with TYPE (and optional INDEX) exists at point.
-
-If INDEX is non-nil, only return true if :index equals index."
-  (cl-some (lambda (ov)
-             (let ((ov-type (overlay-get ov 'org-table-highlight)))
-               (and (equal ov-type type)
-                    (or (not index) (equal (overlay-get ov 'index) index)))))
-           (overlays-at (point))))
-
-(defcustom org-table-highlight-table-context-length 20
-  "Number of characters before and after an Org table to save as context.
-
-This context helps identify the table uniquely when it lacks a #+NAME:
-property.  It is used to match and restore highlights across sessions by
-storing a short prefix and suffix string around the table position."
-  :type 'integer
-  :group 'org-table-highlight)
-
-(defun org-table-highlight--table-context ()
-  "Return contextual metadata for the Org table at point.
-
-This includes the table's name (if any), a short string before the table,
-and a short string after it, used to help identify the table if it has
-no #+NAME:.  The length of these strings is controlled by
-`org-table-highlight-table-context-length'."
-  (when (org-at-table-p)
-    (save-excursion
-      (let* ((table-name (org-table-highlight--get-table-name))
-             (begin (org-table-begin))
-             (before-string
-              (buffer-substring-no-properties
-               (max (point-min) (- begin org-table-highlight-table-context-length))
-               begin))
-             (after-string
-              (buffer-substring-no-properties
-               begin
-               (min (point-max) (+ begin org-table-highlight-table-context-length)))))
-        (make-org-table-highlight--metadata-context
-         :name table-name
-         :before-string before-string
-         :after-string after-string)))))
 
 (defun org-table-highlight--parse-comparator (expr)
   "Convert a comparator EXPR like \">100\" or \"=TODO\" to a comparison form.
@@ -410,16 +471,6 @@ Returns a lambda that takes a string VAL."
          (and-forms (mapcar #'org-table-highlight--parse-and-expr or-parts)))
     `(lambda (val) (or ,@and-forms))))
 
-(defun org-table-highlight--overlay-priority (table-meta)
-  "Compute an overlay priority for new-index highlights in TABLE-META.
-
-If TABLE-META is nil, return a default priority (e.g., 100)."
-  (if (null table-meta)
-      100
-    (+ 100
-       (length (org-table-highlight--metadata-table-col-highlights table-meta))
-       (length (org-table-highlight--metadata-table-row-highlights table-meta)))))
-
 ;;;###autoload
 (defun org-table-highlight-column (&optional color predicate extend)
   "Highlight the current Org table column with a cycling or user-supplied COLOR.
@@ -442,13 +493,13 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
   (let* ((buf-name (buffer-name))
          (table-context (org-table-highlight--table-context))
          (table-meta
-          (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
-            (org-table-highlight--metadata--get-table buf-meta table-context)))
+          (when-let* ((buf-meta (org-table-highlight--metadata-buffer buf-name)))
+            (org-table-highlight--metadata-table buf-meta table-context)))
          (highlighted-columns-count
           (if table-meta
               (length (org-table-highlight--metadata-table-col-highlights table-meta))
             0))
-         (priority (org-table-highlight--overlay-priority table-meta))
+         (priority (org-table-highlight--overlay-compute-priority table-meta))
          (col (org-table-current-column))
          (chosen-color (or color (org-table-highlight--next-color
                                   highlighted-columns-count)))
@@ -458,7 +509,7 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
 
     ;; Save metadata
     (org-table-highlight--update-metadata
-     buf-name table-context 'col col chosen-color predicate extend)
+     buf-name table-context 'column col chosen-color predicate extend)
 
     ;; Apply overlays inside narrowed region
     (save-restriction
@@ -473,7 +524,7 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
                          end t))
               (setq beg (point))
               (setq i (1+ i)))
-            (unless (org-table-highlight--overlayp 'col)
+            (unless (org-table-highlight--overlay-exist-p 'column)
               (setq end (progn (skip-chars-forward (if (org-at-table-hline-p) "-" "^|"))
                                (point)))
               (when (or (null predicate-fn)
@@ -482,9 +533,9 @@ If TABLE-META is nil, return a default priority (e.g., 100)."
                 (when extend
                   (setq beg (save-excursion (beginning-of-line) (back-to-indentation) (point))
                         end (save-excursion (end-of-line) (skip-chars-backward "^|") (point))))
-                (org-table-highlight--make-overlay
+                (org-table-highlight--overlay-create
                  beg end
-                 'org-table-highlight 'col
+                 'org-table-highlight 'column
                  'index col
                  'face `(:background ,chosen-color)
                  'help-echo (when predicate (format "Predicate: %s" predicate))
@@ -506,29 +557,163 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
   (let* ((buf-name (buffer-name))
          (table-context (org-table-highlight--table-context))
          (table-meta
-          (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer buf-name)))
-            (org-table-highlight--metadata--get-table buf-meta table-context)))
+          (when-let* ((buf-meta (org-table-highlight--metadata-buffer buf-name)))
+            (org-table-highlight--metadata-table buf-meta table-context)))
          (highlighted-rows-count
           (if table-meta
               (length (org-table-highlight--metadata-table-row-highlights table-meta))
             0))
-         (priority (org-table-highlight--overlay-priority table-meta))
+         (priority (org-table-highlight--overlay-compute-priority table-meta))
          (row (org-table-current-line))
          (chosen-color (or color (org-table-highlight--next-color highlighted-rows-count)))
          (start (save-excursion (beginning-of-line) (back-to-indentation) (point)))
          (end (save-excursion (end-of-line) (skip-chars-backward "^|") (point))))
     (org-table-highlight--update-metadata buf-name table-context 'row row chosen-color nil nil)
-    (unless (org-table-highlight--overlayp 'row)
-      (org-table-highlight--make-overlay start end
+    (unless (org-table-highlight--overlay-exist-p 'row)
+      (org-table-highlight--overlay-create start end
                                          'face `(:background ,chosen-color)
                                          'org-table-highlight 'row
                                          'index row
                                          'priority priority))))
 
-(defun org-table-highlight-restore-table (table-meta)
+;;;###autoload
+(defun org-table-highlight-clear-column-highlights (&optional all)
+  "Clear highlights in the current Org table column, or all columns.
+
+With a prefix argument ALL, clear all column highlights in the
+current table.  Otherwise, clear only the highlight in the
+current column."
+  (interactive "P")
+  (unless (org-at-table-p)
+    (user-error "Not in an Org table"))
+
+  (let ((col-to-clear (unless all (org-table-current-column))))
+    (when (or (not col-to-clear)
+              (org-table-highlight--overlay-exist-p 'column col-to-clear))
+      (when-let* ((buf-name (buffer-name))
+                  (table-context (org-table-highlight--table-context))
+                  (bounds (org-table-highlight--table-bounds)))
+        (org-table-highlight--update-metadata
+         buf-name table-context 'column col-to-clear nil nil nil 'remove)
+        (org-table-highlight--overlay-remove
+         (car bounds) (cdr bounds) 'column col-to-clear)))))
+
+;;;###autoload
+(defun org-table-highlight-clear-row-highlights (&optional all)
+  "Clear highlights in current Org table row.
+With prefix argument ALL, clear all row highlights."
+  (interactive "P")
+  (unless (org-at-table-p)
+    (user-error "Not in an Org table"))
+  
+  (let ((row-to-clear (unless all (org-table-current-line))))
+    (when (or (not row-to-clear)
+              (org-table-highlight--overlay-exist-p 'row row-to-clear))
+      (when-let* ((buf-name (buffer-name))
+                  (table-context (org-table-highlight--table-context))
+                  (bounds (org-table-highlight--table-bounds)))
+        (org-table-highlight--update-metadata
+         buf-name table-context 'row row-to-clear nil nil nil 'remove)
+        (org-table-highlight--overlay-remove
+         (car bounds) (cdr bounds) 'row row-to-clear)))))
+
+;;;###autoload
+(defun org-table-highlight-clear-table-highlights ()
+  "Clear all column and row highlights in current Org table."
+  (interactive)
+  (unless (org-at-table-p)
+    (user-error "Not in an Org table"))
+  
+  (when-let* ((buf-name (buffer-name))
+              (table-context (org-table-highlight--table-context))
+              (bounds (org-table-highlight--table-bounds)))
+    (org-table-highlight--overlay-remove (car bounds) (cdr bounds))
+    (org-table-highlight--update-metadata
+     buf-name table-context 'column nil nil nil nil 'remove)
+    (org-table-highlight--update-metadata
+     buf-name table-context 'row nil nil nil nil 'remove)))
+
+(defun org-table-highlight-clear-buffer-highlights (&optional keep-metadata)
+  "Clear all Org table highlight overlays in the current buffer.
+
+This removes both column and row highlights overlays across the entire
+buffer, regardless of table context.
+
+If KEEP-METADATA is t, the metadata will not be deleted."
+  (interactive)
+  (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name))))
+    (org-table-highlight--overlay-remove (point-min) (point-max))
+    (unless keep-metadata
+      (setq org-table-highlight--metadata
+            (delete buf-meta org-table-highlight--metadata))
+      (org-table-highlight--save-metadata)))
+  (message "All Org table highlight overlays removed from buffer."))
+
+;;;###autoload
+(defun org-table-highlight-list-highlights (&optional buffers-to-process)
+  "List highlighted Org tables.
+
+BUFFERS-TO-PROCESS is the list of buffer to display the highlight.
+Behavior depends on the prefix argument (\\[universal-argument]):
+- No prefix: List tables in the current buffer.
+- One prefix: Prompt for a buffer to list.
+- Two prefixes: List tables from all buffers with known highlight metadata."
+  (interactive
+   (let ((all-buffers-with-meta
+          (cl-loop for b-meta in org-table-highlight--metadata
+                   collect (get-buffer (org-table-highlight--metadata-buffer-name b-meta)))))
+     (list
+      (pcase current-prefix-arg
+        ;; C-u C-u: Use all buffers
+        ('(16) all-buffers-with-meta)
+
+        ;; C-u: Prompt for one buffer
+        ('(4) (if all-buffers-with-meta
+                  (list (get-buffer
+                         (completing-read "List highlights for buffer: "
+                                          (mapcar #'buffer-name all-buffers-with-meta)
+                                          nil t)))
+                (progn (message "No highlight metadata found.") nil)))
+
+        ;; No prefix: Use current buffer
+        (_ (list (current-buffer)))))))
+
+  (when buffers-to-process
+    (with-help-window (get-buffer-create "*Org Table Highlights*")
+      (let ((first-buffer t))
+        (dolist (buffer buffers-to-process)
+          ;; Print a header if processing multiple buffers
+          (if first-buffer
+              (setq first-buffer nil)
+            (princ "\n\n"))
+          (princ (format "--- Highlights in %s --\n\n" (buffer-name buffer)))
+          (if-let* ((buffer-name (buffer-name buffer))
+                    (buf-meta (org-table-highlight--metadata-buffer buffer-name))
+                    (tables (org-table-highlight--metadata-buffer-tables buf-meta)))
+              (dolist (table-meta tables)
+                (let* ((context (org-table-highlight--metadata-table-context table-meta))
+                       (name (org-table-highlight--metadata-context-name context))
+                       (pos (with-current-buffer buffer
+                              (org-table-highlight--table-position context)))
+                       (num-cols (length (org-table-highlight--metadata-table-col-highlights table-meta)))
+                       (num-rows (length (org-table-highlight--metadata-table-row-highlights table-meta))))
+                  (princ (format "  - Table %s" (or name "(unnamed)")))
+                  (when pos
+                    (insert-button
+                     " [jump]"
+                     'action `(lambda (_)
+                                (pop-to-buffer ',buffer)
+                                (goto-char ,pos))
+                     'follow-link t))
+                  (princ (format " (%d columns, %d rows highlighted)\n" num-cols num-rows))))
+            ;; Message if a specific buffer in the list had no highlights
+            (unless (org-table-highlight--metadata-buffer (buffer-name buffer))
+              (princ (format "(No highlights found in %s)\n" (buffer-name buffer))))))))))
+
+(defun org-table-highlight--restore-table (table-meta)
   "Restore highlights for the Org table with TABLE-META."
   (when-let* ((table-context (org-table-highlight--metadata-table-context table-meta))
-              (pos (org-table-highlight--get-table-position table-context)))
+              (pos (org-table-highlight--table-position table-context)))
     (save-excursion
       (goto-char pos)
       ;; Reapply column highlights
@@ -547,140 +732,30 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
             (org-table-goto-line row)
             (org-table-highlight-row color)))))))
 
-(defun org-table-highlight-restore-table-at-point ()
+(defun org-table-highlight-restore-table ()
   "Restore highlights for the Org table at point."
   (interactive)
   (when-let* ((buffer-name (buffer-name))
               (table-context (org-table-highlight--table-context))
-              (buf-meta (org-table-highlight--metadata--get-buffer buffer-name))
-              (table-meta (org-table-highlight--metadata--get-table buf-meta table-context)))
-    (org-table-highlight-restore-table table-meta)))
+              (buf-meta (org-table-highlight--metadata-buffer buffer-name))
+              (table-meta (org-table-highlight--metadata-table buf-meta table-context)))
+    (org-table-highlight--restore-table table-meta)))
 
-;;;###autoload
-(defun org-table-highlight-clear-column-highlights (&optional all)
-  "Clear highlights in the current Org table column, or all columns.
-
-With a prefix argument ALL, clear all column highlights in the
-current table.  Otherwise, clear only the highlight in the
-current column."
-  (interactive "P")
-  (unless (org-at-table-p)
-    (user-error "Not in an Org table"))
-
-  (let ((col-to-clear (unless all (org-table-current-column))))
-    (when (or (not col-to-clear)
-              (org-table-highlight--overlayp 'col col-to-clear))
-      (when-let* ((buf-name (buffer-name))
-                  (table-context (org-table-highlight--table-context))
-                  (bounds (org-table-highlight--table-bounds)))
-        (org-table-highlight--update-metadata
-         buf-name table-context 'col col-to-clear nil nil nil 'remove)
-        (org-table-highlight--remove-overlays
-         (car bounds) (cdr bounds) 'col col-to-clear)))))
-
-;;;###autoload
-(defun org-table-highlight-clear-row-highlights (&optional all)
-  "Clear highlights in current Org table row.
-With prefix argument ALL, clear all row highlights."
-  (interactive "P")
-  (unless (org-at-table-p)
-    (user-error "Not in an Org table"))
-  
-  (let ((row-to-clear (unless all (org-table-current-line))))
-    (when (or (not row-to-clear)
-              (org-table-highlight--overlayp 'row row-to-clear))
-      (when-let* ((buf-name (buffer-name))
-                  (table-context (org-table-highlight--table-context))
-                  (bounds (org-table-highlight--table-bounds)))
-        (org-table-highlight--update-metadata
-           buf-name table-context 'row row-to-clear nil nil nil 'remove)
-        (org-table-highlight--remove-overlays
-         (car bounds) (cdr bounds) 'row row-to-clear)))))
-
-;;;###autoload
-(defun org-table-highlight-clear-all-highlights ()
-  "Clear all column and row highlights in current Org table.
-
-Keep metadata if KEEP-METADATA non-nils."
-  (interactive)
-  (unless (org-at-table-p)
-    (user-error "Not in an Org table"))
-  
-  (when-let* ((bounds (org-table-highlight--table-bounds)))
-    (org-table-highlight--remove-overlays (car bounds) (cdr bounds))))
-
-(defcustom org-table-highlight-metadata-file
-  (locate-user-emacs-file "org-table-highlight-metadata.el")
-  "File where Org table highlight metadata is saved."
-  :type 'file
-  :group 'org-table-highlight)
-
-(defun org-table-highlight-save-metadata ()
-  "Save `org-table-highlight--metadata` to `org-table-highlight-metadata-file'."
-  (interactive)
-  (condition-case nil
-      (with-temp-file org-table-highlight-metadata-file
-        (insert ";;; org-table-highlight saved metadata. ")
-        (insert "Do not edit this file.\n\n")
-        (pp org-table-highlight--metadata (current-buffer))
-        (insert "\n"))
-    (error "Cannot save metadata to %s" org-table-highlight-metadata-file)))
-
-;;;###autoload
-(defun org-table-highlight-load-metadata ()
-  "Load Org table highlight metadata from `org-table-highlight-metadata-file'."
-  (interactive)
-  (when (file-exists-p org-table-highlight-metadata-file)
-    (condition-case nil
-        (progn (setq org-table-highlight--metadata
-                     (with-temp-buffer
-                       (insert-file-contents org-table-highlight-metadata-file)
-                       (goto-char (point-min))
-                       (read (current-buffer))))
-               (message "org-table-highlight--metadata variable loaded"))
-      (error "Cannot read metadata at %s" org-table-highlight-metadata-file))))
-
-(defun org-table-highlight--get-table-position (context)
-  "Get position of table beginning position based on CONTEXT."
-  (save-excursion
-    (let ((name (org-table-highlight--metadata-context-name context))
-          (before-string (org-table-highlight--metadata-context-before-string context))
-          (after-string (org-table-highlight--metadata-context-after-string context))
-          point)
-
-      (goto-char (point-min))
-
-      (if name
-          (progn (re-search-forward (format "#\\+NAME:[ \t]*%s" (regexp-quote name)) nil t)
-                 (setq point (1+ (point))))
-
-        (if (and before-string (search-forward before-string (point-max) t))
-            (progn
-              (goto-char (match-end 0))
-              (setq point (point))))
-
-        (if (and after-string (search-forward after-string (point-max) t))
-            (progn
-              (goto-char (match-beginning 0))
-              (setq point (point)))))
-      point)))
-
-;;;###autoload
 (defun org-table-highlight-restore-buffer ()
   "Apply highlight metadata to all tables in the current buffer."
   (interactive)
   (org-table-highlight-load-metadata)
-  (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name))))
+  (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name))))
     (dolist (table-meta (org-table-highlight--metadata-buffer-tables buf-meta))
-      (org-table-highlight-restore-table table-meta))))
+      (org-table-highlight--restore-table table-meta))))
 
-(defun org-table-highlight--collect-table-metadata (tbl)
-  "Collect highlight metadata from TBL (an `org-element' table).
+(defun org-table-highlight--build-table-metadata (tbl)
+  "Build highlight metadata from TBL (an `org-element' table).
 
 Returns a metadata entry of the form:
   ((:name NAME :before-string STR :after-string STR)
-   :col ((N :color COLOR :predicate PREDICATE :extend t))
-   :row ((N :color COLOR :predicate PREDICATE)))
+   :col-highlights ((N :color COLOR :predicate PREDICATE :extend t))
+   :row-highlights ((N :color COLOR :predicate PREDICATE)))
 or nil if there are no highlight overlays."
   (let* ((begin (org-element-property :contents-begin tbl))
          (end (org-element-property :contents-end tbl))
@@ -700,7 +775,7 @@ or nil if there are no highlight overlays."
             (when extend
               (setq indice (cons index (plist-put (cdr indice) 'extend t)))))
           (pcase type
-            ('col (cl-pushnew indice col-highlights :test #'equal))
+            ('column (cl-pushnew indice col-highlights :test #'equal))
             ('row (cl-pushnew indice row-highlights :test #'equal)))))
       (when (or col-highlights row-highlights)
         (save-excursion
@@ -711,27 +786,17 @@ or nil if there are no highlight overlays."
              :col-highlights (nreverse col-highlights)
              :row-highlights (nreverse row-highlights))))))))
 
-(defun org-table-highlight--refresh-buffer-metadata ()
-  "Collect highlight metadata from all tables in the current buffer.
-
-Returns a list of entries of the form:
-  ((:name NAME :before-string STR :after-string STR)
-   :col ((N . COLOR)) :row ((N . COLOR)))."
+(defun org-table-highlight--build-buffer-metadata ()
+  "Build highlight metadata from all tables in the current buffer."
   (interactive)
   (when (derived-mode-p 'org-mode)
-    (let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name)))
-           (table-meta
-            (cl-remove-if-not #'identity
-                              (org-element-map (org-element-parse-buffer) 'table
-                                #'org-table-highlight--collect-table-metadata))))
-      (when buf-meta
-        (setf (org-table-highlight--metadata-buffer-tables buf-meta) table-meta)
-
-        (when (null (org-table-highlight--metadata-buffer-tables buf-meta))
-          (setq org-table-highlight--metadata
-                (delete buf-meta org-table-highlight--metadata)))
-
-        (org-table-highlight-save-metadata)))))
+    (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name)))
+                (table-meta
+                 (cl-remove-if-not #'identity
+                                   (org-element-map (org-element-parse-buffer) 'table
+                                     #'org-table-highlight--build-table-metadata))))
+      (setf (org-table-highlight--metadata-buffer-tables buf-meta) table-meta)
+      (org-table-highlight--save-metadata))))
 
 (defun org-table-highlight--fix-indice-1 (index ref-index handle entry table-meta)
   "Adjust a highlight ENTRY in TABLE-META depending on HANDLE and position.
@@ -821,9 +886,9 @@ It does the following:
 This function is intended to be called after structural edits (e.g., with
 `org-table-insert-column', `org-table-delete-row', etc.)."
   (save-excursion
-    (when-let* ((buf-meta (org-table-highlight--metadata--get-buffer (buffer-name)))
+    (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name)))
                 (table-context (org-table-highlight--table-context))
-                (table-meta (org-table-highlight--metadata--get-table buf-meta table-context))
+                (table-meta (org-table-highlight--metadata-table buf-meta table-context))
                 (bounds (org-table-highlight--table-bounds)))
       (let ((changed '())
             (removed '()))
@@ -831,18 +896,18 @@ This function is intended to be called after structural edits (e.g., with
         (unless (memq handle '(up down below above delete-row))
           (let ((ref-col (org-table-current-column)))
             (dolist (col (org-table-highlight--metadata-table-col-highlights table-meta))
-              (when-let ((r (org-table-highlight--fix-indice-1
-                             (car col) ref-col handle col table-meta)))
+              (when-let* ((r (org-table-highlight--fix-indice-1
+                              (car col) ref-col handle col table-meta)))
                 (pcase r
-                  (`(:removed ,i) (push `(col . ,i) removed))
-                  (`(:changed ,old ,new) (push `(col . (,old . ,new)) changed)))))))
+                  (`(:removed ,i) (push `(column . ,i) removed))
+                  (`(:changed ,old ,new) (push `(column . (,old . ,new)) changed)))))))
 
         ;; Rows
         (unless (memq handle '(left right delete-column))
           (let ((ref-row (org-table-current-line)))
             (dolist (row (org-table-highlight--metadata-table-row-highlights table-meta))
-              (when-let ((r (org-table-highlight--fix-indice-1
-                             (car row) ref-row handle row table-meta)))
+              (when-let* ((r (org-table-highlight--fix-indice-1
+                              (car row) ref-row handle row table-meta)))
                 (pcase r
                   (`(:removed ,i) (push `(row . ,i) removed))
                   (`(:changed ,old ,new) (push `(row . (,old . ,new)) changed)))))))
@@ -851,82 +916,12 @@ This function is intended to be called after structural edits (e.g., with
         (dolist (entry (append removed changed))
           (cl-destructuring-bind (type . i) entry
             (let ((idx (if (consp i) (car i) i)))
-              (org-table-highlight--remove-overlays (car bounds) (cdr bounds) type idx))))
+              (org-table-highlight--overlay-remove (car bounds) (cdr bounds) type idx))))
 
         (unless removed
-          (org-table-highlight-restore-table table-meta))
+          (org-table-highlight--restore-table table-meta))
         (org-table-highlight--cleanup-metadata buf-meta table-meta)
-        (org-table-highlight-save-metadata)))))
-
-(defun org-table-highlight-clear-buffer-overlays ()
-  "Clear all Org table highlight overlays in the current buffer.
-
-This removes both column and row highlights overlays across the entire
-buffer, regardless of table context."
-  (interactive)
-  (org-table-highlight--remove-overlays (point-min) (point-max))
-  (message "All Org table highlight overlays removed from buffer."))
-
-;;;###autoload
-(defun org-table-highlight-list-all (&optional buffers-to-process)
-  "List highlighted Org tables.
-
-BUFFERS-TO-PROCESS is the list of buffer to display the highlight.
-Behavior depends on the prefix argument (\\[universal-argument]):
-- No prefix: List tables in the current buffer.
-- One prefix: Prompt for a buffer to list.
-- Two prefixes: List tables from all buffers with known highlight metadata."
-  (interactive
-   (let ((all-buffers-with-meta
-          (cl-loop for b-meta in org-table-highlight--metadata
-                   collect (get-buffer (org-table-highlight--metadata-buffer-name b-meta)))))
-     (list
-      (pcase current-prefix-arg
-        ;; C-u C-u: Use all buffers
-        ('(16) all-buffers-with-meta)
-
-        ;; C-u: Prompt for one buffer
-        ('(4) (if all-buffers-with-meta
-                  (list (get-buffer
-                         (completing-read "List highlights for buffer: "
-                                          (mapcar #'buffer-name all-buffers-with-meta)
-                                          nil t)))
-                (progn (message "No highlight metadata found.") nil)))
-
-        ;; No prefix: Use current buffer
-        (_ (list (current-buffer)))))))
-
-  (when buffers-to-process
-    (with-help-window (get-buffer-create "*Org Table Highlights*")
-      (let ((first-buffer t))
-        (dolist (buffer buffers-to-process)
-          ;; Print a header if processing multiple buffers
-          (if first-buffer
-              (setq first-buffer nil)
-            (princ "\n\n"))
-          (princ (format "--- Highlights in %s --\n\n" (buffer-name buffer)))
-          (if-let* ((buffer-name (buffer-name buffer))
-                    (buf-meta (org-table-highlight--metadata--get-buffer buffer-name))
-                    (tables (org-table-highlight--metadata-buffer-tables buf-meta)))
-              (dolist (table-meta tables)
-                (let* ((context (org-table-highlight--metadata-table-context table-meta))
-                       (name (org-table-highlight--metadata-context-name context))
-                       (pos (with-current-buffer buffer
-                              (org-table-highlight--get-table-position context)))
-                       (num-cols (length (org-table-highlight--metadata-table-col-highlights table-meta)))
-                       (num-rows (length (org-table-highlight--metadata-table-row-highlights table-meta))))
-                  (princ (format "- Table %s" (or name "(unnamed)")))
-                  (when pos
-                    (insert-button
-                     " [jump]"
-                     'action `(lambda (_)
-                                (pop-to-buffer ',buffer)
-                                (goto-char ,pos))
-                     'follow-link t))
-                  (princ (format " (%d columns, %d rows highlighted)\n" num-cols num-rows))))
-            ;; Message if a specific buffer in the list had no highlights
-            (unless (org-table-highlight--metadata--get-buffer (buffer-name buffer))
-              (princ (format "(No highlights found in %s)\n" (buffer-name buffer))))))))))
+        (org-table-highlight--save-metadata)))))
 
 (defun org-table-highlight--after-insert-column ()
   "Advice: Fix highlight indices after inserting a column."
@@ -957,7 +952,7 @@ When MOVE non-nils, move row down."
 
 (defun org-table-highlight--enable-advice ()
   "Enable all org-table-highlight related advices."
-  (advice-add 'org-table-align :after #'org-table-highlight-restore-table-at-point)
+  (advice-add 'org-table-align :after #'org-table-highlight-restore-table)
   (advice-add 'org-table-insert-column :after #'org-table-highlight--after-insert-column)
   (advice-add 'org-table-delete-column :after #'org-table-highlight--after-delete-column)
   (advice-add 'org-table-move-column :after #'org-table-highlight--after-move-column)
@@ -967,7 +962,7 @@ When MOVE non-nils, move row down."
 
 (defun org-table-highlight--disable-advice ()
   "Disable all org-table-highlight related advices."
-  (advice-remove 'org-table-align #'org-table-highlight-restore-table-at-point)
+  (advice-remove 'org-table-align #'org-table-highlight-restore-table)
   (advice-remove 'org-table-insert-column #'org-table-highlight--after-insert-column)
   (advice-remove 'org-table-delete-column #'org-table-highlight--after-delete-column)
   (advice-remove 'org-table-move-column #'org-table-highlight--after-move-column)
@@ -991,15 +986,17 @@ When disabled:
   :group 'org-table-highlight
   (if org-table-highlight-mode
       (progn
+        (unless (derived-mode-p 'org-mode)
+          (user-error "Please use this package in org-mode!"))
+        
         (org-table-highlight--enable-advice)
-        (add-hook 'kill-buffer-hook #'org-table-highlight--refresh-buffer-metadata nil t)
+        (add-hook 'kill-buffer-hook #'org-table-highlight--build-buffer-metadata nil t)
         (org-table-highlight-restore-buffer)
         (message "org-table-highlight-mode enabled."))
     (progn
-      (when (derived-mode-p 'org-mode)
-        (org-table-highlight-clear-buffer-overlays))
+      (org-table-highlight-clear-buffer-highlights 'keep-metadata)
       (org-table-highlight--disable-advice)
-      (remove-hook 'kill-buffer-hook #'org-table-highlight--refresh-buffer-metadata t)
+      (remove-hook 'kill-buffer-hook #'org-table-highlight--build-buffer-metadata t)
       (message "org-table-highlight-mode disabled: all highlights cleared, while metadata remains uncleared.."))))
 
 (provide 'org-table-highlight)

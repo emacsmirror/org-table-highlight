@@ -46,13 +46,14 @@ Or manually:
 
 Open an Org table and run the interactive commands:
 
-| Command                                     | Description                               |
-|---------------------------------------------+-------------------------------------------|
-| ~org-table-highlight-column~                  | Highlight the current column              |
-| ~org-table-highlight-row~                     | Highlight the current row                 |
-| ~org-table-highlight-clear-column-highlights~ | Clear current/all column highlights       |
-| ~org-table-highlight-clear-row-highlights~    | Clear current/all row highlights          |
-| ~org-table-highlight-clear-all-highlights~    | Clear all highlights in the current table |
+| Command                                     | Description                                 |
+|---------------------------------------------+---------------------------------------------|
+| ~org-table-highlight-column~                  | Highlight the current column                |
+| ~org-table-highlight-row~                     | Highlight the current row                   |
+| ~org-table-highlight-clear-column-highlights~ | Clear current/all column highlights         |
+| ~org-table-highlight-clear-row-highlights~    | Clear current/all row highlights            |
+| ~org-table-highlight-clear-table-highlights~  | Clear all highlights in the current table   |
+| ~org-table-highlight-list-highlights~         | List all highlighted table info in a buffer |
 
 The =org-table-highlight-column= command supports prefix arguments to modify its behavior:
 - None prefix: highlight the current column using a pre-defined default color.
