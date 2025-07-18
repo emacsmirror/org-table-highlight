@@ -29,9 +29,7 @@ Via =use-package= for Emacs 30:
 #+begin_src emacs-lisp
 (use-package org-table-highlight
   :vc (:url "https://www.github.com/llcc/org-table-highlight" :rev :newest)
-  :hook (org-mode . org-table-highlight-mode)
-  :config
-  (add-hook 'after-init-hook #'org-table-highlight-load-metadata))
+  :hook (org-mode . org-table-highlight-mode))
 #+end_src
 
 Or manually:
