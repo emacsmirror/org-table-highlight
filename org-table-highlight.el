@@ -764,19 +764,19 @@ or nil if there are no highlight overlays."
          (row-highlights '()))
     (when overlays
       (dolist (ov overlays)
-        (let* ((type (overlay-get ov 'org-table-highlight))
-               (index (overlay-get ov 'index))
-               (predicate (overlay-get ov 'predicate))
-               (extend (overlay-get ov 'extend))
-               (color (plist-get (overlay-get ov 'face) :background))
-               (indice (list index :color color)))
-          (when predicate
-            (setq indice (cons index (plist-put (cdr indice) 'predicate predicate)))
-            (when extend
-              (setq indice (cons index (plist-put (cdr indice) 'extend t)))))
-          (pcase type
-            ('column (cl-pushnew indice col-highlights :test #'equal))
-            ('row (cl-pushnew indice row-highlights :test #'equal)))))
+        (when-let* ((type (overlay-get ov 'org-table-highlight)))
+          (let* ((index (overlay-get ov 'index))
+                 (predicate (overlay-get ov 'predicate))
+                 (extend (overlay-get ov 'extend))
+                 (color (plist-get (overlay-get ov 'face) :background))
+                 (indice (list index :color color)))
+            (when predicate
+              (setq indice (cons index (plist-put (cdr indice) 'predicate predicate)))
+              (when extend
+                (setq indice (cons index (plist-put (cdr indice) 'extend t)))))
+            (pcase type
+              ('column (cl-pushnew indice col-highlights :test #'equal))
+              ('row (cl-pushnew indice row-highlights :test #'equal))))))
       (when (or col-highlights row-highlights)
         (save-excursion
           (goto-char begin)
@@ -788,15 +788,13 @@ or nil if there are no highlight overlays."
 
 (defun org-table-highlight--build-buffer-metadata ()
   "Build highlight metadata from all tables in the current buffer."
-  (interactive)
-  (when (derived-mode-p 'org-mode)
-    (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name)))
-                (table-meta
-                 (cl-remove-if-not #'identity
-                                   (org-element-map (org-element-parse-buffer) 'table
-                                     #'org-table-highlight--build-table-metadata))))
-      (setf (org-table-highlight--metadata-buffer-tables buf-meta) table-meta)
-      (org-table-highlight--save-metadata))))
+  (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name)))
+              (table-meta
+               (cl-remove-if-not #'identity
+                                 (org-element-map (org-element-parse-buffer) 'table
+                                   #'org-table-highlight--build-table-metadata))))
+    (setf (org-table-highlight--metadata-buffer-tables buf-meta) table-meta)
+    (org-table-highlight--save-metadata)))
 
 (defun org-table-highlight--fix-indice-1 (index ref-index handle entry table-meta)
   "Adjust a highlight ENTRY in TABLE-META depending on HANDLE and position.
@@ -918,8 +916,7 @@ This function is intended to be called after structural edits (e.g., with
             (let ((idx (if (consp i) (car i) i)))
               (org-table-highlight--overlay-remove (car bounds) (cdr bounds) type idx))))
 
-        (unless removed
-          (org-table-highlight--restore-table table-meta))
+        (org-table-highlight--restore-table table-meta)
         (org-table-highlight--cleanup-metadata buf-meta table-meta)
         (org-table-highlight--save-metadata)))))
 
