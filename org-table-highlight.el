@@ -285,8 +285,7 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
 
 (defun org-table-highlight--table-bounds ()
   "Return the (START . END) buffer positions of the current Org table."
-  (cons (save-excursion (org-table-begin))
-        (save-excursion (org-table-end))))
+  (cons (org-table-begin) (org-table-end)))
 
 (defcustom org-table-highlight-table-context-length 20
   "Number of characters before and after an Org table to save as context.
@@ -304,21 +303,20 @@ This includes the table's name (if any), a short string before the table,
 and a short string after it, used to help identify the table if it has
 no #+NAME:.  The length of these strings is controlled by
 `org-table-highlight-table-context-length'."
-  (save-excursion
-    (let* ((table-name (org-table-highlight--table-name))
-           (begin (org-table-begin))
-           (before-string
-            (buffer-substring-no-properties
-             (max (point-min) (- begin org-table-highlight-table-context-length))
-             begin))
-           (after-string
-            (buffer-substring-no-properties
-             begin
-             (min (point-max) (+ begin org-table-highlight-table-context-length)))))
-      (make-org-table-highlight--metadata-context
-       :name table-name
-       :before-string before-string
-       :after-string after-string))))
+  (let* ((table-name (org-table-highlight--table-name))
+         (begin (org-table-begin))
+         (before-string
+          (buffer-substring-no-properties
+           (max (point-min) (- begin org-table-highlight-table-context-length))
+           begin))
+         (after-string
+          (buffer-substring-no-properties
+           begin
+           (min (point-max) (+ begin org-table-highlight-table-context-length)))))
+    (make-org-table-highlight--metadata-context
+     :name table-name
+     :before-string before-string
+     :after-string after-string)))
 
 (defun org-table-highlight--table-position (context)
   "Get position of table beginning position based on CONTEXT."
@@ -576,6 +574,29 @@ With a prefix argument (\\[universal-argument]), prompt for a color."
                                          'index row
                                          'priority priority))))
 
+(defun org-table-highlight--clear-highlights (type &optional index)
+  "Clear highlight overlays and metadata of TYPE in current Org table.
+
+TYPE should be either row, column, or all.
+If INDEX is non-nil, only remove the highlight at that index (row or column).
+If TYPE is all, INDEX is ignored and all table highlights are cleared."
+  (unless (org-at-table-p)
+    (user-error "Not in an Org table"))
+
+  (when-let* ((buf-name (buffer-name))
+              (table-context (org-table-highlight--table-context))
+              (bounds (org-table-highlight--table-bounds)))
+    (pcase type
+      ('all
+       (org-table-highlight--overlay-remove (car bounds) (cdr bounds))
+       (org-table-highlight--update-metadata buf-name table-context 'column nil nil nil nil 'remove)
+       (org-table-highlight--update-metadata buf-name table-context 'row nil nil nil nil 'remove))
+      ((or 'row 'column)
+       (when (or (not index)
+                 (org-table-highlight--overlay-exist-p type index))
+         (org-table-highlight--overlay-remove (car bounds) (cdr bounds) type index)
+         (org-table-highlight--update-metadata buf-name table-context type index nil nil nil 'remove))))))
+
 ;;;###autoload
 (defun org-table-highlight-clear-column-highlights (&optional all)
   "Clear highlights in the current Org table column, or all columns.
@@ -584,54 +605,20 @@ With a prefix argument ALL, clear all column highlights in the
 current table.  Otherwise, clear only the highlight in the
 current column."
   (interactive "P")
-  (unless (org-at-table-p)
-    (user-error "Not in an Org table"))
-
-  (let ((col-to-clear (unless all (org-table-current-column))))
-    (when (or (not col-to-clear)
-              (org-table-highlight--overlay-exist-p 'column col-to-clear))
-      (when-let* ((buf-name (buffer-name))
-                  (table-context (org-table-highlight--table-context))
-                  (bounds (org-table-highlight--table-bounds)))
-        (org-table-highlight--update-metadata
-         buf-name table-context 'column col-to-clear nil nil nil 'remove)
-        (org-table-highlight--overlay-remove
-         (car bounds) (cdr bounds) 'column col-to-clear)))))
+  (org-table-highlight--clear-highlights 'column (unless all (org-table-current-column))))
 
 ;;;###autoload
 (defun org-table-highlight-clear-row-highlights (&optional all)
   "Clear highlights in current Org table row.
 With prefix argument ALL, clear all row highlights."
   (interactive "P")
-  (unless (org-at-table-p)
-    (user-error "Not in an Org table"))
-  
-  (let ((row-to-clear (unless all (org-table-current-line))))
-    (when (or (not row-to-clear)
-              (org-table-highlight--overlay-exist-p 'row row-to-clear))
-      (when-let* ((buf-name (buffer-name))
-                  (table-context (org-table-highlight--table-context))
-                  (bounds (org-table-highlight--table-bounds)))
-        (org-table-highlight--update-metadata
-         buf-name table-context 'row row-to-clear nil nil nil 'remove)
-        (org-table-highlight--overlay-remove
-         (car bounds) (cdr bounds) 'row row-to-clear)))))
+  (org-table-highlight--clear-highlights 'row (unless all (org-table-current-line))))
 
 ;;;###autoload
 (defun org-table-highlight-clear-table-highlights ()
   "Clear all column and row highlights in current Org table."
   (interactive)
-  (unless (org-at-table-p)
-    (user-error "Not in an Org table"))
-  
-  (when-let* ((buf-name (buffer-name))
-              (table-context (org-table-highlight--table-context))
-              (bounds (org-table-highlight--table-bounds)))
-    (org-table-highlight--overlay-remove (car bounds) (cdr bounds))
-    (org-table-highlight--update-metadata
-     buf-name table-context 'column nil nil nil nil 'remove)
-    (org-table-highlight--update-metadata
-     buf-name table-context 'row nil nil nil nil 'remove)))
+  (org-table-highlight--clear-highlights 'all))
 
 (defun org-table-highlight-clear-buffer-highlights (&optional keep-metadata)
   "Clear all Org table highlight overlays in the current buffer.
