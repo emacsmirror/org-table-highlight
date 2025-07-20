@@ -1,3 +1,4 @@
+#+html: <a href="https://www.melpa.org/#/org-table-highlight"><img alt="MELPA" src="https://www.melpa.org/packages/org-table-highlight-badge.svg"/></a>
 
 Highlight Org-mode table columns and rows using colored overlays.  
 Designed for enhanced readability and interactive table highlighting.
@@ -24,11 +25,10 @@ Designed for enhanced readability and interactive table highlighting.
 
 * Installation
 
-Via =use-package= for Emacs 30:
+~org-table-highlight~ is on melpa now, install it via use-package:
 
 #+begin_src emacs-lisp
-(use-package org-table-highlight
-  :vc (:url "https://www.github.com/llcc/org-table-highlight" :rev :newest)
+(use-package org-table-highlight :ensure t
   :hook (org-mode . org-table-highlight-mode))
 #+end_src
 
