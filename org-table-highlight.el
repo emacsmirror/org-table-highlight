@@ -964,7 +964,7 @@ When enabled:
 
 When disabled:
 - All highlights (overlays) in the current buffer are removed.
-- All metadata for this buffer is cleared.
+- All metadata for this buffer remailns uncleared for later restoration.
 - Advices and hooks are disabled."
   :lighter " OrgTblHL"
   :group 'org-table-highlight
