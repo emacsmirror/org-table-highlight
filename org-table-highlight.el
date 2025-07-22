@@ -218,28 +218,27 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
                 new-after-string)))
 
       ;; 2. Modify the highlights list for the specified type (column or row).
-      (let ((highlights-accessor (if (eq type 'column)
-                                     #'org-table-highlight--metadata-table-col-highlights
-                                   #'org-table-highlight--metadata-table-row-highlights))
-            (highlights-setter (if (eq type 'column)
-                                   (lambda (tbl val) (setf (org-table-highlight--metadata-table-col-highlights tbl) val))
-                                 (lambda (tbl val) (setf (org-table-highlight--metadata-table-row-highlights tbl) val)))))
-        (if (null index)
-            ;; Clear all highlights of this type if INDEX is nil and REMOVE is true.
-            (when remove (funcall highlights-setter table-meta nil))
-          ;; Add or remove a highlight for a specific INDEX.
-          (let* ((current-highlights (funcall highlights-accessor table-meta))
-                 (filtered-highlights (cl-remove-if (lambda (entry) (= (car entry) index)) current-highlights)))
-            (funcall highlights-setter table-meta
-                     (if remove
-                         filtered-highlights
-                       ;; Add a new-index entry to the list.
-                       (let ((new-entry (list index :color color)))
-                         (when predicate
-                           (setq new-entry (cons index (plist-put (cdr new-entry) :predicate predicate)))
-                           (when extend
-                             (setq new-entry (cons index (plist-put (cdr new-entry) :extend t)))))
-                         (cons new-entry filtered-highlights))))))))
+      (let* ((highlights-accessor (if (eq type 'column)
+                                      #'org-table-highlight--metadata-table-col-highlights
+                                    #'org-table-highlight--metadata-table-row-highlights))
+             (highlights-setter (if (eq type 'column)
+                                    (lambda (tbl val) (setf (org-table-highlight--metadata-table-col-highlights tbl) val))
+                                  (lambda (tbl val) (setf (org-table-highlight--metadata-table-row-highlights tbl) val))))
+             (current-highlights (funcall highlights-accessor table-meta)))
+        
+        (cond
+         ;; Clear all highlights of this type if INDEX is nil and REMOVE is true.
+         ((and remove (null index))
+          (funcall highlights-setter table-meta nil))
+         ;; Add or remove a highlight for a specific INDEX.
+         (t
+          (let ((filtered-highlights (cl-remove-if (lambda (entry) (= (car entry) index)) current-highlights)))
+            (unless remove
+              (let ((entry `(,index :color ,color)))
+                (when predicate (setq entry (append entry `(:predicate ,predicate))))
+                (when extend    (setq entry (append entry `(:extend t))))
+                (push entry filtered-highlights)))
+            (funcall highlights-setter table-meta filtered-highlights))))))
 
     ;; Cleanup metadata if buf-meta or table-meta is none
     (org-table-highlight--cleanup-metadata buf-meta table-meta)
@@ -354,10 +353,8 @@ no #+NAME:.  The length of these strings is controlled by
 PROPERTIES is a plist of additional overlay properties like :symbol value."
   (let ((ov (make-overlay start end)))
     (overlay-put ov 'evaporate t)
-    (while properties
-      (let ((prop (pop properties))
-            (val  (pop properties)))
-        (overlay-put ov prop val)))
+    (cl-loop for (prop val) on properties by #'cddr
+             do (overlay-put ov prop val))
     ov))
 
 (defun org-table-highlight--overlay-compute-priority (table-meta)
@@ -366,8 +363,8 @@ PROPERTIES is a plist of additional overlay properties like :symbol value."
 If TABLE-META is nil, return a default priority (e.g., 100)."
   (if table-meta
       (+ 100
-       (length (org-table-highlight--metadata-table-col-highlights table-meta))
-       (length (org-table-highlight--metadata-table-row-highlights table-meta)))
+         (length (org-table-highlight--metadata-table-col-highlights table-meta))
+         (length (org-table-highlight--metadata-table-row-highlights table-meta)))
     100))
 
 (defun org-table-highlight--overlay-exist-p (type &optional index)
@@ -490,9 +487,9 @@ Returns a lambda that takes a string VAL."
   
   (let* ((buf-name (buffer-name))
          (table-context (org-table-highlight--table-context))
-         (table-meta
-          (when-let* ((buf-meta (org-table-highlight--metadata-buffer buf-name)))
-            (org-table-highlight--metadata-table buf-meta table-context)))
+         (buf-meta (org-table-highlight--metadata-buffer buf-name))
+         (table-meta (and buf-meta
+                          (org-table-highlight--metadata-table buf-meta table-context)))
          (highlighted-columns-count
           (if table-meta
               (length (org-table-highlight--metadata-table-col-highlights table-meta))
@@ -531,8 +528,7 @@ Returns a lambda that takes a string VAL."
                 (when extend
                   (setq beg (save-excursion (beginning-of-line) (back-to-indentation) (point))
                         end (save-excursion (end-of-line) (skip-chars-backward "^|") (point))))
-                (org-table-highlight--overlay-create
-                 beg end
+                (org-table-highlight--overlay-create beg end
                  'org-table-highlight 'column
                  'index col
                  'face `(:background ,chosen-color)
@@ -747,39 +743,39 @@ or nil if there are no highlight overlays."
   (let* ((begin (org-element-property :contents-begin tbl))
          (end (org-element-property :contents-end tbl))
          (overlays (overlays-in begin end))
-         (col-highlights '())
-         (row-highlights '()))
-    (when overlays
-      (dolist (ov overlays)
-        (when-let* ((type (overlay-get ov 'org-table-highlight)))
-          (let* ((index (overlay-get ov 'index))
-                 (predicate (overlay-get ov 'predicate))
+         (col-highlights nil)
+         (row-highlights nil))
+    (dolist (ov overlays)
+      (let ((type (overlay-get ov 'org-table-highlight))
+            (index (overlay-get ov 'index)))
+        (when (and type index)
+          (let* ((predicate (overlay-get ov 'predicate))
                  (extend (overlay-get ov 'extend))
                  (color (plist-get (overlay-get ov 'face) :background))
-                 (indice (list index :color color)))
-            (when predicate
-              (setq indice (cons index (plist-put (cdr indice) 'predicate predicate)))
-              (when extend
-                (setq indice (cons index (plist-put (cdr indice) 'extend t)))))
+                 (indice `(,index :color ,color
+                                  ,@(when predicate `(:predicate ,predicate))
+                                  ,@(when extend `(:extend t)))))
             (pcase type
               ('column (cl-pushnew indice col-highlights :test #'equal))
-              ('row (cl-pushnew indice row-highlights :test #'equal))))))
-      (when (or col-highlights row-highlights)
-        (save-excursion
-          (goto-char begin)
-          (let ((context (org-table-highlight--table-context)))
-            (make-org-table-highlight--metadata-table
-             :context context
-             :col-highlights (nreverse col-highlights)
-             :row-highlights (nreverse row-highlights))))))))
+              ('row (cl-pushnew indice row-highlights :test #'equal)))))))
+    (when (or col-highlights row-highlights)
+      (save-excursion
+        (goto-char begin)
+        (let ((context (org-table-highlight--table-context)))
+          (make-org-table-highlight--metadata-table
+           :context context
+           :col-highlights (nreverse col-highlights)
+           :row-highlights (nreverse row-highlights)))))))
 
 (defun org-table-highlight--build-buffer-metadata ()
   "Build highlight metadata from all tables in the current buffer."
   (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name)))
+              (parsed (org-element-parse-buffer))
               (table-meta
-               (cl-remove-if-not #'identity
-                                 (org-element-map (org-element-parse-buffer) 'table
-                                   #'org-table-highlight--build-table-metadata))))
+               (cl-loop for tbl in (org-element-map parsed 'table #'identity)
+                        for tbl-meta = (org-table-highlight--build-table-metadata tbl)
+                        when tbl-meta
+                        collect tbl-meta)))
     (setf (org-table-highlight--metadata-buffer-tables buf-meta) table-meta)
     (org-table-highlight--save-metadata)))
 
@@ -875,12 +871,13 @@ This function is intended to be called after structural edits (e.g., with
                 (table-context (org-table-highlight--table-context))
                 (table-meta (org-table-highlight--metadata-table buf-meta table-context))
                 (bounds (org-table-highlight--table-bounds)))
-      (let ((changed '())
-            (removed '()))
+      (let ((changed nil)
+            (removed nil))
         ;; Columns
         (unless (memq handle '(up down below above delete-row))
-          (let ((ref-col (org-table-current-column)))
-            (dolist (col (org-table-highlight--metadata-table-col-highlights table-meta))
+          (let ((ref-col (org-table-current-column))
+                (cols (org-table-highlight--metadata-table-col-highlights table-meta)))
+            (dolist (col cols)
               (when-let* ((r (org-table-highlight--fix-indice-1
                               (car col) ref-col handle col table-meta)))
                 (pcase r
@@ -889,8 +886,9 @@ This function is intended to be called after structural edits (e.g., with
 
         ;; Rows
         (unless (memq handle '(left right delete-column))
-          (let ((ref-row (org-table-current-line)))
-            (dolist (row (org-table-highlight--metadata-table-row-highlights table-meta))
+          (let ((ref-row (org-table-current-line))
+                (rows (org-table-highlight--metadata-table-row-highlights table-meta)))
+            (dolist (row rows)
               (when-let* ((r (org-table-highlight--fix-indice-1
                               (car row) ref-row handle row table-meta)))
                 (pcase r
@@ -898,7 +896,7 @@ This function is intended to be called after structural edits (e.g., with
                   (`(:changed ,old ,new) (push `(row . (,old . ,new)) changed)))))))
 
         ;; Remove overlays
-        (dolist (entry (append removed changed))
+        (dolist (entry (nconc removed changed))
           (cl-destructuring-bind (type . i) entry
             (let ((idx (if (consp i) (car i) i)))
               (org-table-highlight--overlay-remove (car bounds) (cdr bounds) type idx))))
