@@ -905,32 +905,48 @@ This function is intended to be called after structural edits (e.g., with
         (org-table-highlight--cleanup-metadata buf-meta table-meta)
         (org-table-highlight--save-metadata)))))
 
+(defmacro org-table-highlight--inhibit-advice (&rest body)
+  "Temporarily disable `org-table-highlight--restore-table' advice during BODY."
+  `(let ((active (advice-member-p #'org-table-highlight--restore-table 'org-table-align)))
+     (when active
+       (advice-remove 'org-table-align #'org-table-highlight--restore-table))
+     (unwind-protect
+         (progn ,@body)
+       (when active
+         (advice-add 'org-table-align :after #'org-table-highlight--restore-table)))))
+
 (defun org-table-highlight--after-insert-column ()
   "Advice: Fix highlight indices after inserting a column."
-  (org-table-highlight--fix-indice 'insert))
+  (org-table-highlight--inhibit-advice
+   (org-table-highlight--fix-indice 'insert)))
 
 (defun org-table-highlight--after-delete-column ()
   "Advice: Fix highlight indices after deleting a column."
-  (org-table-highlight--fix-indice 'delete-column))
+  (org-table-highlight--inhibit-advice
+   (org-table-highlight--fix-indice 'delete-column)))
 
 (defun org-table-highlight--after-move-column (&optional move)
   "Advice: Fix highlight indices after moving a column.
 When MOVE non-nils, move column right"
-  (org-table-highlight--fix-indice (or move 'right)))
+  (org-table-highlight--inhibit-advice
+   (org-table-highlight--fix-indice (or move 'right))))
 
 (defun org-table-highlight--after-insert-row (&optional arg)
   "Advice: Fix highlight indices after inserting a row.
 When ARG nils, insert above, otherwise insert below."
-  (org-table-highlight--fix-indice (if arg 'below 'above)))
+  (org-table-highlight--inhibit-advice
+   (org-table-highlight--fix-indice (if arg 'below 'above))))
 
 (defun org-table-highlight--after-kill-row ()
   "Advice: Fix highlight indices after killing a row."
-  (org-table-highlight--fix-indice 'delete-row))
+  (org-table-highlight--inhibit-advice
+   (org-table-highlight--fix-indice 'delete-row)))
 
 (defun org-table-highlight--after-move-row (&optional move)
   "Advice: Fix highlight indices after moving a row.
 When MOVE non-nils, move row down."
-  (org-table-highlight--fix-indice (or move 'down)))
+  (org-table-highlight--inhibit-advice
+   (org-table-highlight--fix-indice (or move 'down))))
 
 (defun org-table-highlight--enable-advice ()
   "Enable all org-table-highlight related advices."
