@@ -77,7 +77,7 @@ Each `org-table-highlight--metadata-table' contains:
         - COLUMN-INDEX is an integer (1-based)
         - COLOR is a color string like \"#FFB6C1\"
 
-  - `:row-highlights` — a list of highlighted rows:
+  - :row-highlights — a list of highlighted rows:
       ((ROW-INDEX :color COLOR) ...), where:
         - ROW-INDEX is an integer (1-based)
         - COLOR is a string like \"#ADD8E6\"
@@ -101,7 +101,7 @@ This variable is updated when:
 - Collecting metadata on buffer kill
 
 It is saved to disk using `org-table-highlight--save-metadata'
-and restored using `org-table-highlight-load-metadata'.")
+and restored using `org-table-highlight--load-metadata'.")
 
 (cl-defstruct org-table-highlight--metadata-context
   "Represents the context of an Org table within a buffer.
@@ -262,10 +262,8 @@ If REMOVE is non-nil, the entry at INDEX is removed; otherwise it's added."
         (insert "\n"))
     (error "Cannot save metadata to %s" org-table-highlight-metadata-file)))
 
-;;;###autoload
-(defun org-table-highlight-load-metadata ()
+(defun org-table-highlight--load-metadata ()
   "Load Org table highlight metadata from `org-table-highlight-metadata-file'."
-  (interactive)
   (when (file-exists-p org-table-highlight-metadata-file)
     (condition-case nil
         (progn (setq org-table-highlight--metadata
@@ -727,7 +725,7 @@ Behavior depends on the prefix argument (\\[universal-argument]):
 (defun org-table-highlight-restore-buffer ()
   "Apply highlight metadata to all tables in the current buffer."
   (interactive)
-  (org-table-highlight-load-metadata)
+  (org-table-highlight--load-metadata)
   (when-let* ((buf-meta (org-table-highlight--metadata-buffer (buffer-name))))
     (dolist (table-meta (org-table-highlight--metadata-buffer-tables buf-meta))
       (org-table-highlight--restore-table table-meta))))
@@ -737,8 +735,8 @@ Behavior depends on the prefix argument (\\[universal-argument]):
 
 Returns a metadata entry of the form:
   ((:name NAME :before-string STR :after-string STR)
-   :col-highlights ((N :color COLOR :predicate PREDICATE :extend t))
-   :row-highlights ((N :color COLOR :predicate PREDICATE)))
+    :col-highlights ((N :color COLOR :predicate PREDICATE :extend t))
+    :row-highlights ((N :color COLOR :predicate PREDICATE)))
 or nil if there are no highlight overlays."
   (let* ((begin (org-element-property :contents-begin tbl))
          (end (org-element-property :contents-end tbl))
