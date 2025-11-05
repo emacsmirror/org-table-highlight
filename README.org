@@ -28,8 +28,10 @@ Designed for enhanced readability and interactive table highlighting.
 ~org-table-highlight~ is on melpa now, install it via use-package:
 
 #+begin_src emacs-lisp
-(use-package org-table-highlight :ensure t
-  :hook (org-mode . org-table-highlight-mode))
+(use-package org-table-highlight
+  :hook (org-mode . org-table-highlight-mode)
+  :config
+  (add-hook 'after-init-hook #'org-table-highlight--load-metadata))
 #+end_src
 
 Or manually:
